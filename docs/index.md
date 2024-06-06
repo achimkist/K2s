@@ -47,7 +47,7 @@ Get started [here](quickstart/index.md).
 - Multiple network cards support, including support for LAN and *WI-FI* network interfaces
 - Offline support by being able to operate the *K8s* cluster and workloads without internet connectivity
 - [Building a Container Image](user-guide/building-container-image.md) for building and testing *Windows* and *Linux* containers
-- [Rich Set of Addons](https://github.com/Siemens-Healthineers/K2s/blob/main/addons/README.md){target="_blank"} which can be used optionally for additional functionality 
+- [Rich Set of Addons](https://github.com/Siemens-Healthineers/K2s/blob/v1.0.0/addons/README.md){target="_blank"} which can be used optionally for additional functionality 
 - *K2*s supports 3 different [Hosting Variants](user-guide/hosting-variants.md)
 - Template-based setup of the different variants through configuration files
 - Main configuration through central configuration file

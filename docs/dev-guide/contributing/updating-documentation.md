@@ -4,6 +4,11 @@ SPDX-License-Identifier: MIT
 -->
 
 # Updating Documentation
+!!! failure
+      This section does not apply to *K2s* `v1.0.0`, because at the time of the `v1.0.0` release this documentation did not exist yet.
+
+      The mechanism to generate and version this documentation was introduced after the `v1.0.0` release. The `main` branch -related part is valid, though.
+
 The documentation is written in [Markdown](https://www.markdownguide.org/){target="_blank"}, this website is generated based on this *Markdown* content using [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/){target="_blank"} and the documentation versioning is done with [mike](https://github.com/jimporter/mike){target="_blank"}.
 
 This website is hosted on [GitHub Pages](https://pages.github.com/){target="_blank"} based on the [`gh-pages` branch](https://github.com/Siemens-Healthineers/K2s/tree/gh-pages){target="_blank"} (i.e. the default *GitHub Pages* branch).

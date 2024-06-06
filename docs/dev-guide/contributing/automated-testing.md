@@ -37,7 +37,7 @@ The main entry point for automated testing is the script `execute_all_tests.ps1`
 The preceding example would execute all *PowerShell*-based tests tagged with `unit`.
 
 !!! tip
-    Inspect the [execute_all_tests.ps1](https://github.com/Siemens-Healthineers/K2s/blob/main/test/execute_all_tests.ps1){target="_blank"} script for further parameter details and descriptions.<br/>
+    Inspect the [execute_all_tests.ps1](https://github.com/Siemens-Healthineers/K2s/blob/v1.0.0/test/execute_all_tests.ps1){target="_blank"} script for further parameter details and descriptions.<br/>
     See [Commonly Used Tags](tags-labels.md#commonly-used-tags) for commonly used labels/tags.
     
 ## Automated Testing with Pester
@@ -155,14 +155,14 @@ BeforeAll {
 
 ## Automated Testing with Ginkgo/Gomega
 ### Log Output Redirection
-For diagnostic logging, *k2s* CLI uses [slog](https://pkg.go.dev/log/slog){target="_blank"}. To redirect the log output to *Ginkgo*, set the *Ginkgo* logger as follows (*Ginkgo* uses [logr](https://github.com/go-logr/logr/){target="_blank"} internally):
+For diagnostic logging, *k2s* CLI uses [klog](https://pkg.go.dev/k8s.io/klog/v2){target="_blank"}. To redirect the log output to *Ginkgo*, set the *Ginkgo* logger as follows:
 ```go
 var _ = BeforeSuite(func() {
-	slog.SetDefault(slog.New(logr.ToSlogHandler(GinkgoLogr)))
+	klog.SetLogger(GinkgoLogr)
 })
 ```
 
-This enables control over *slog* output, i.e. the output can be enabled when running *Ginkgo* in verbose mode (`ginkog -v`) and be omitted in non-verbose mode.
+This enables control over *klog* output, i.e. the output can be enabled when running *Ginkgo* in verbose mode (`ginkog -v`) and be omitted in non-verbose mode.
 
 ### *K2s* Acceptance Testing
 !!! info
@@ -171,7 +171,7 @@ This enables control over *slog* output, i.e. the output can be enabled when run
 **To mark acceptance tests as such** and provide additional information about test prerequisites (e.g. a running *K2s* cluster, internet connectivity, etc.), **use [Tags/Labels](tags-labels.md)**.
 
 #### Tech Stack
-The tech stack mostly comprises the [*Go* testing package](https://pkg.go.dev/testing){target="_blank"}, [*Ginkgo*](https://onsi.github.io/ginkgo/#top){target="_blank"}/[*Gomega*](https://onsi.github.io/gomega/#top){target="_blank"} and the *[K2s Testing Framework](https://github.com/Siemens-Healthineers/K2s/blob/main/k2s/test/framework/README.md){target="_blank"}* to write acceptance tests in an efficient way without having to write boilerplate code repeatedly. The levels of abstraction are depicted in the following:
+The tech stack mostly comprises the [*Go* testing package](https://pkg.go.dev/testing){target="_blank"}, [*Ginkgo*](https://onsi.github.io/ginkgo/#top){target="_blank"}/[*Gomega*](https://onsi.github.io/gomega/#top){target="_blank"} and the *[K2s Testing Framework](https://github.com/Siemens-Healthineers/K2s/blob/v1.0.0/test/framework/README.md){target="_blank"}* to write acceptance tests in an efficient way without having to write boilerplate code repeatedly. The levels of abstraction are depicted in the following:
 
 ```mermaid
 flowchart TD
@@ -180,7 +180,7 @@ flowchart TD
 ```
 
 #### Implementing Tests/Specs
-See [*K2s* Acceptance Tests/Specs](https://github.com/Siemens-Healthineers/K2s/blob/main/k2s/test/README.md){target="_blank"}.
+See [Implementing Tests/Specs](https://github.com/Siemens-Healthineers/K2s/blob/v1.0.0/test/README.md#implementing-testsspecs){target="_blank"}.
 
 #### Executing Tests/Specs
 Multiple options exist to run *Go*-based test specs:

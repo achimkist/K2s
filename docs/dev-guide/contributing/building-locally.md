@@ -10,7 +10,7 @@ All the prerequisites mentioned in [Installation Prerequisites](../../op-manual/
 * Install [*Go*](https://go.dev/dl/){target="_blank"} for *Windows*.
 
 ## Build *Go* projects
-Building *Go* based projects is done through [BuildGoExe.ps1](https://github.com/Siemens-Healthineers/K2s/blob/main/smallsetup/common/BuildGoExe.ps1){target="_blank"}
+Building *Go* based projects is done through [BuildGoExe.ps1](https://github.com/Siemens-Healthineers/K2s/blob/v1.0.0/smallsetup/common/BuildGoExe.ps1){target="_blank"}
 
 !!! tip
     `bgo.cmd` is a shortcut command to invoke the script `BuildGoExe.ps1`.<br/>
@@ -24,7 +24,7 @@ C:\k\bin\bgo.cmd
 
 Building `httpproxy` *Go* project:
 ```console
-C:\k\bin\bgo -ProjectDir "C:\k\k2s\cmd\httpproxy\" -ExeOutDir "c:\k\bin"
+C:\k\bin\bgo -ProjectDir "C:\k\pkg\network\httpproxy\" -ExeOutDir "c:\k\bin"
 ```
 
 !!! info
@@ -40,6 +40,6 @@ C:\k\bin\bgo -BuildAll 1
 
 If *K2s* is installed then just simply execute the command without the full path:
 ```console
-bgo -ProjectDir "C:\k\k2s\cmd\httpproxy\" -ExeOutDir "c:\k\bin"
+bgo -ProjectDir "C:\k\pkg\network\httpproxy\" -ExeOutDir "c:\k\bin"
 bgo -BuildAll 1
 ```

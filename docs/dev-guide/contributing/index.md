@@ -20,16 +20,16 @@ The code is mainly written in *Go* and *PowerShell*. See [*PowerShell* Developme
 The codebase structure looks like the following:
 
 ```{.text .no-copy title=""}
+├── LICENSES
 ├── addons      --> Addon(s)-specific configuration and PowerShell scripts
 ├── bin         --> Binaries (either committed to this repo or dropped as build target)
 ├── build
 ├── cfg         --> Configuration files
-├── docs        --> Main documentation
-├── k2s         --> Go-based sources
+├── doc         --> Main documentation
 ├── lib         --> PowerShell scripts
-├── LICENSES
+├── pkg         --> Go-based sources
 ├── smallsetup  --> [legacy] PowerShell scripts; to be migrated to "lib"
-├── test        --> Main test script(s)
+├── test        --> Main test script(s) and Go-based e2e tests
 ├── ...
 ├── README.md
 ├── k2s.exe
