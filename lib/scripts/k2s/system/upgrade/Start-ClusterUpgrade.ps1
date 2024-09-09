@@ -117,7 +117,7 @@ function Start-ClusterUpgrade {
             Write-Progress -Activity 'Checking if cluster is installed..' -Id 1 -Status '1/10' -PercentComplete 10 -CurrentOperation 'Cluster availability'
         }
 
-        Assert-UpgradeOperation
+        #Assert-UpgradeOperation
 
         # check cluster is running
         if ($ShowProgress -eq $true) {
@@ -145,7 +145,13 @@ function Start-ClusterUpgrade {
         if (!(Test-Path $currentKubeToolsFolder)) {
             $currentKubeToolsFolder = "$(Get-ClusterInstalledFolder)\bin\exe"
         }
+
+        $currentBinFolder = "$(Get-ClusterInstalledFolder)\bin"
+
         Export-ClusterResources -SkipResources:$SkipResources -PathResources $BackupDir -ExePath $currentKubeToolsFolder
+        
+        # Backup application images
+        Export-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
 
         # Invoke backup hooks
         $hooksBackupPath = Join-Path $BackupDir 'hooks'
@@ -194,6 +200,8 @@ function Start-ClusterUpgrade {
         }
         Invoke-ClusterInstall -ShowLogs:$ShowLogs -Config $Config -Proxy $Proxy -DeleteFiles:$DeleteFiles -MasterVMMemory $memoryVM -MasterVMProcessorCount $coresVM -MasterDiskSize $storageVM
         Wait-ForAPIServer
+
+        Import-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
 
         # restore addons
         if ($ShowProgress -eq $true) {

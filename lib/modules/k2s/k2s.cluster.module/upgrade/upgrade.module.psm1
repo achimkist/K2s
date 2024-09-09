@@ -3,8 +3,11 @@
 # SPDX-License-Identifier: MIT
 
 $infraModule = "$PSScriptRoot/../../k2s.infra.module/k2s.infra.module.psm1"
+$vmModule = "$PSScriptRoot/../../k2s.node.module/linuxnode/vm/vm.module.psm1"
+$imageModule = "$PSScriptRoot/../image/image.module.psm1"
 
-Import-Module $infraModule
+
+Import-Module $infraModule, $imageModule, $vmModule
 
 $processTools = @'
 
@@ -105,6 +108,149 @@ function Invoke-Cmd {
     else {
         Write-Log 'Error in calling command!'
         throw 'Error: Not possible to call command!'
+    }
+}
+
+function Export-UserApplicationImages {
+    param (
+        [parameter(Mandatory = $true, HelpMessage = 'Location where to backup')]
+        [string] $BackupDir,
+        [Parameter(Mandatory = $true, HelpMessage = 'Bin directory where current cluster is installed')]
+        [string] $ExePath
+    )
+    $linuxContainerImages = Get-ContainerImagesOnLinuxNode
+    $windowsContainerImages = Get-ContainerImagesOnWindowsNode
+
+    $windowsPath = "$BackupDir\windowsImages"
+    $linuxPath = "$BackupDir\linuxImages"
+
+    New-Item -Path $windowsPath -ItemType Directory
+    New-Item -Path $linuxPath -ItemType Directory
+
+    Write-Log "Windows: ${windowsContainerImages}"
+    Write-Log "linux: ${linuxContainerImages}"
+
+    if($linuxContainerImages.Count -ne 0) {
+        foreach ($image in $linuxContainerImages){
+            if ($image.Repository -ne '<none>') {
+                $imageId = $image.ImageId
+                $imageName = $image.Repository
+                $imageTag = $image.Tag
+                $imageFullName = ''
+                if ($imageTag -eq '<none>') {
+                    $imageFullName = $imageName
+                }
+                else {
+                    $imageFullName = "${imageName}:${imageTag}"
+                }
+
+                Write-Log "Exporting image ${imageFullName}. This can take some time..."
+
+                $finalExportPath = $linuxPath
+
+                (Invoke-CmdOnControlPlaneViaSSHKey "sudo buildah push ${imageId} oci-archive:/tmp/${imageId}.tar:${imageFullName} 2>&1" -NoLog).Output | Write-Log
+
+                $exportSuccess = $?
+                Copy-FromControlPlaneViaSSHKey "/tmp/${imageId}.tar" $finalExportPath
+
+                if ($exportSuccess -and $?) {
+                    Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
+                }
+
+                (Invoke-CmdOnControlPlaneViaSSHKey "cd /tmp && sudo rm -rf ${imageId}.tar" -NoLog).Output | Write-Log
+            }
+        }
+
+    }
+    if ($windowsContainerImages.Count -ne 0) {
+        foreach($image in $windowsContainerImages) {
+            if ($image.Repository -ne '<none>') {
+                Write-Log 'Windows image found!'
+                $imageId = $image.ImageId
+                $imageName = $image.Repository
+                $imageTag = $image.Tag
+                $imageFullName = ''
+                if ($imageTag -eq '<none>') {
+                    $imageFullName = $imageName
+                }
+                else {
+                    $imageFullName = "${imageName}:${imageTag}"
+                }
+                Write-Log "Exporting image ${imageFullName}. This can take some time..."
+
+                $finalExportPath = "$windowsPath\${imageId}.tar"
+
+                $nerdctlExe = "$ExePath\nerdctl.exe"
+
+                Write-Log "Trying to pull all platform layers for image '$imageFullName'"
+                $pullOutput = &$nerdctlExe -n 'k8s.io' pull $imageFullName --all-platforms 2>&1 | Out-String
+                if ($pullOutput.Contains('failed to do request')) {
+                    Write-Log "Not able to pull all platform layers for image '$imageFullName'"
+                    Write-Log "Exporting image '$imageFullName' only for current platform"
+                    &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName
+                }
+                else {
+                    Write-Log "Exporting image '$imageFullName' for all platforms"
+                    &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName --all-platforms
+                }
+
+                if ($?) {
+                    Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
+                }
+            }
+        }
+    }
+}
+
+function Import-UserApplicationImages {
+    param (
+        [parameter(Mandatory = $true, HelpMessage = 'Location from where to import')]
+        [string] $BackupDir,
+        [Parameter(Mandatory = $true, HelpMessage = 'Bin directory where current cluster is installed')]
+        [string] $ExePath
+    )
+
+    $windowsImagePath = "$BackupDir/windowsImages/"
+
+    $windowsImages = @()
+    $files = Get-Childitem -recurse $windowsImagePath | Where-Object { $_.Name -match '.*.tar' } | ForEach-Object { $_.Fullname }
+    $windowsImages += $files
+    Write-Log "Importing images from $ImageDir. This can take some time..."
+
+    $nerdctlExe = "$ExePath\nerdctl.exe"
+
+    foreach ($windowsImage in $windowsImages) {
+        &$nerdctlExe -n k8s.io load -i $windowsImage
+        if ($?) {
+            Write-Log "$windowsImage imported successfully"
+        }
+    }
+
+    $linuxImagePath = "$BackupDir/linuxImages/"
+
+    $linuxImages = @()
+    $files = Get-Childitem -recurse $linuxImagePath | Where-Object { $_.Name -match '.*.tar' } | ForEach-Object { $_.Fullname }
+    $linuxImages += $files
+
+    Write-Log "Importing images from $ImageDir. This can take some time..."
+    foreach ($linuxImage in $linuxImages) {
+        Copy-ToControlPlaneViaSSHKey $linuxImage '/tmp/import.tar'
+
+        if (!$?) {
+            Write-Error "Image $linuxImage could not be copied to KubeMaster"
+        }
+
+        (Invoke-CmdOnControlPlaneViaSSHKey 'sudo buildah pull oci-archive:/tmp/import.tar 2>&1' -NoLog).Output | Write-Log
+
+        if ($?) {
+            Write-Log "Image archive $linuxImage imported successfully."
+        }
+
+        (Invoke-CmdOnControlPlaneViaSSHKey 'cd /tmp && sudo rm -rf import.tar' -NoLog).Output | Write-Log
+    }
+
+    if ($EncodeStructuredOutput -eq $true) {
+        Send-ToCli -MessageType $MessageType -Message @{Error = $null }
     }
 }
 
@@ -644,4 +790,4 @@ function Remove-SetupConfigIfExisting {
 Export-ModuleMember -Function Assert-UpgradeOperation, Enable-ClusterIsRunning, Assert-YamlTools, Export-ClusterResources,
 Invoke-ClusterUninstall, Invoke-ClusterInstall, Import-NotNamespacedResources, Import-NamespacedResources, Remove-ExportedClusterResources,
 Get-TempPath, Get-LinuxVMCores, Get-LinuxVMMemory, Get-LinuxVMStorageSize, Get-ClusterInstalledFolder, Backup-LogFile, Restore-LogFile, Restore-MergeLogFiles,
-Invoke-UpgradeBackupRestoreHooks, Remove-SetupConfigIfExisting
+Invoke-UpgradeBackupRestoreHooks, Remove-SetupConfigIfExisting, Export-UserApplicationImages, Import-UserApplicationImages
