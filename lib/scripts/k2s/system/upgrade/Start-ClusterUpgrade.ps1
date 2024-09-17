@@ -117,7 +117,7 @@ function Start-ClusterUpgrade {
             Write-Progress -Activity 'Checking if cluster is installed..' -Id 1 -Status '1/11' -PercentComplete 10 -CurrentOperation 'Cluster availability'
         }
 
-        #Assert-UpgradeOperation
+        Assert-UpgradeOperation
 
         # check cluster is running
         if ($ShowProgress -eq $true) {
