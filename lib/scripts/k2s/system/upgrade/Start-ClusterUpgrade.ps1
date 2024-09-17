@@ -97,7 +97,7 @@ function Start-ClusterUpgrade {
     try {
         # start progress
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Gathering upgrade information...' -Id 1 -Status '0/10' -PercentComplete 0 -CurrentOperation 'Starting upgrade'
+            Write-Progress -Activity 'Gathering upgrade information...' -Id 1 -Status '0/11' -PercentComplete 0 -CurrentOperation 'Starting upgrade'
         }
 
         # check if cluster is installed
@@ -114,14 +114,14 @@ function Start-ClusterUpgrade {
 
         # retrieve folder where current K2s package is located
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Checking if cluster is installed..' -Id 1 -Status '1/10' -PercentComplete 10 -CurrentOperation 'Cluster availability'
+            Write-Progress -Activity 'Checking if cluster is installed..' -Id 1 -Status '1/11' -PercentComplete 10 -CurrentOperation 'Cluster availability'
         }
 
         #Assert-UpgradeOperation
 
         # check cluster is running
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Checking cluster state..' -Id 1 -Status '2/10' -PercentComplete 20 -CurrentOperation 'Starting cluster, please wait..'
+            Write-Progress -Activity 'Checking cluster state..' -Id 1 -Status '2/11' -PercentComplete 20 -CurrentOperation 'Starting cluster, please wait..'
         }
 
         Enable-ClusterIsRunning -ShowLogs:$ShowLogs
@@ -137,7 +137,7 @@ function Start-ClusterUpgrade {
 
         # export cluster resources
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Check if resources need to be exported..' -Id 1 -Status '3/10' -PercentComplete 30 -CurrentOperation 'Starting cluster, please wait..'
+            Write-Progress -Activity 'Check if resources need to be exported..' -Id 1 -Status '3/11' -PercentComplete 30 -CurrentOperation 'Starting cluster, please wait..'
         }
 
         # kube tools folder changed from bin\exe to bin\kube
@@ -150,6 +150,9 @@ function Start-ClusterUpgrade {
 
         Export-ClusterResources -SkipResources:$SkipResources -PathResources $BackupDir -ExePath $currentKubeToolsFolder
         
+        if ($ShowProgress -eq $true) {
+            Write-Progress -Activity 'Backing up the application images' -Id 1 -Status '4/11' -PercentComplete 35 -CurrentOperation 'Backing up the application images, please wait..'
+        }
         # Backup application images
         Export-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
 
@@ -158,7 +161,7 @@ function Start-ClusterUpgrade {
         Invoke-UpgradeBackupRestoreHooks -HookType Backup -BackupDir $hooksBackupPath -ShowLogs:$ShowLogs -AdditionalHooksDir $AdditionalHooksDir
 
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Backing up addons..' -Id 1 -Status '4/10' -PercentComplete 40 -CurrentOperation 'Backing up addons, please wait..'
+            Write-Progress -Activity 'Backing up addons..' -Id 1 -Status '5/11' -PercentComplete 40 -CurrentOperation 'Backing up addons, please wait..'
         }
 
         # backup all addons
@@ -180,7 +183,7 @@ function Start-ClusterUpgrade {
     try {
         # uninstall of old cluster
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Uninstall cluster..' -Id 1 -Status '5/10' -PercentComplete 40 -CurrentOperation 'Uninstalling cluster, please wait..'
+            Write-Progress -Activity 'Uninstall cluster..' -Id 1 -Status '6/11' -PercentComplete 40 -CurrentOperation 'Uninstalling cluster, please wait..'
         }
         Invoke-ClusterUninstall -ShowLogs:$ShowLogs -DeleteFiles:$DeleteFiles
 
@@ -196,16 +199,17 @@ function Start-ClusterUpgrade {
 
         # install of new cluster
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Install cluster..' -Id 1 -Status '6/10' -PercentComplete 50 -CurrentOperation 'Installing cluster, please wait..'
+            Write-Progress -Activity 'Install cluster..' -Id 1 -Status '7/11' -PercentComplete 50 -CurrentOperation 'Installing cluster, please wait..'
         }
         Invoke-ClusterInstall -ShowLogs:$ShowLogs -Config $Config -Proxy $Proxy -DeleteFiles:$DeleteFiles -MasterVMMemory $memoryVM -MasterVMProcessorCount $coresVM -MasterDiskSize $storageVM
         Wait-ForAPIServer
 
+        $currentBinFolder = "$(Get-ClusterInstalledFolder)\bin"
         Import-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
 
         # restore addons
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Apply not namespaced resources on cluster..' -Id 1 -Status '7/10' -PercentComplete 70 -CurrentOperation 'Apply not namespaced resources, please wait..'
+            Write-Progress -Activity 'Apply not namespaced resources on cluster..' -Id 1 -Status '8/11' -PercentComplete 70 -CurrentOperation 'Apply not namespaced resources, please wait..'
         }
         Restore-Addons -BackupDir $addonsBackupPath
 
@@ -216,16 +220,16 @@ function Start-ClusterUpgrade {
         # import of resources
         Import-NotNamespacedResources -FolderIn $BackupDir -ExePath $kubeExeFolder
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Apply namespaced resources on cluster..' -Id 1 -Status '8/10' -PercentComplete 80 -CurrentOperation 'Apply namespaced resources, please wait..'
+            Write-Progress -Activity 'Apply namespaced resources on cluster..' -Id 1 -Status '9/11' -PercentComplete 80 -CurrentOperation 'Apply namespaced resources, please wait..'
         }
         Import-NamespacedResources -FolderIn $BackupDir -ExePath $kubeExeFolder
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Restoring addons..' -Id 1 -Status '9/10' -PercentComplete 90 -CurrentOperation 'Restoring addons, please wait..'
+            Write-Progress -Activity 'Restoring addons..' -Id 1 -Status '10/11' -PercentComplete 90 -CurrentOperation 'Restoring addons, please wait..'
         }
 
         # show completion
         if ($ShowProgress -eq $true) {
-            Write-Progress -Activity 'Gathering executed upgrade information..' -Id 1 -Status '10/10' -PercentComplete 100 -CurrentOperation 'Upgrade successfully finished'
+            Write-Progress -Activity 'Gathering executed upgrade information..' -Id 1 -Status '11/11' -PercentComplete 100 -CurrentOperation 'Upgrade successfully finished'
         }
 
         # restore log files

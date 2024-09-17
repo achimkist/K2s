@@ -118,8 +118,9 @@ function Export-UserApplicationImages {
         [Parameter(Mandatory = $true, HelpMessage = 'Bin directory where current cluster is installed')]
         [string] $ExePath
     )
+    Write-Log "Export all of the application images.." -Console
     $linuxContainerImages = Get-ContainerImagesOnLinuxNode
-    $windowsContainerImages = Get-ContainerImagesOnWindowsNode
+    $windowsContainerImages = Get-ContainerImagesOnWindowsNode -crictlExePath "$ExePath\crictl.exe"
 
     $windowsPath = "$BackupDir\windowsImages"
     $linuxPath = "$BackupDir\linuxImages"
@@ -127,8 +128,7 @@ function Export-UserApplicationImages {
     New-Item -Path $windowsPath -ItemType Directory
     New-Item -Path $linuxPath -ItemType Directory
 
-    Write-Log "Windows: ${windowsContainerImages}"
-    Write-Log "linux: ${linuxContainerImages}"
+    Write-Log "Starting to export linux images."
 
     if($linuxContainerImages.Count -ne 0) {
         foreach ($image in $linuxContainerImages){
@@ -144,7 +144,7 @@ function Export-UserApplicationImages {
                     $imageFullName = "${imageName}:${imageTag}"
                 }
 
-                Write-Log "Exporting image ${imageFullName}. This can take some time..."
+                Write-Log "Exporting image ${imageFullName}."
 
                 $finalExportPath = $linuxPath
 
@@ -162,6 +162,9 @@ function Export-UserApplicationImages {
         }
 
     }
+
+    Write-Log "Starting to export windows images."
+
     if ($windowsContainerImages.Count -ne 0) {
         foreach($image in $windowsContainerImages) {
             if ($image.Repository -ne '<none>') {
@@ -176,7 +179,7 @@ function Export-UserApplicationImages {
                 else {
                     $imageFullName = "${imageName}:${imageTag}"
                 }
-                Write-Log "Exporting image ${imageFullName}. This can take some time..."
+                Write-Log "Exporting image ${imageFullName}."
 
                 $finalExportPath = "$windowsPath\${imageId}.tar"
 
@@ -200,6 +203,8 @@ function Export-UserApplicationImages {
             }
         }
     }
+
+    Write-Log "Exporting images finished."
 }
 
 function Import-UserApplicationImages {
@@ -210,12 +215,14 @@ function Import-UserApplicationImages {
         [string] $ExePath
     )
 
+    Write-Log "Import all application images" -Console
+
     $windowsImagePath = "$BackupDir/windowsImages/"
 
     $windowsImages = @()
     $files = Get-Childitem -recurse $windowsImagePath | Where-Object { $_.Name -match '.*.tar' } | ForEach-Object { $_.Fullname }
     $windowsImages += $files
-    Write-Log "Importing images from $ImageDir. This can take some time..."
+    Write-Log "Importing windows images from $windowsImagePath."
 
     $nerdctlExe = "$ExePath\nerdctl.exe"
 
@@ -232,7 +239,7 @@ function Import-UserApplicationImages {
     $files = Get-Childitem -recurse $linuxImagePath | Where-Object { $_.Name -match '.*.tar' } | ForEach-Object { $_.Fullname }
     $linuxImages += $files
 
-    Write-Log "Importing images from $ImageDir. This can take some time..."
+    Write-Log "Importing linux images from $linuxImagePath."
     foreach ($linuxImage in $linuxImages) {
         Copy-ToControlPlaneViaSSHKey $linuxImage '/tmp/import.tar'
 
@@ -252,6 +259,7 @@ function Import-UserApplicationImages {
     if ($EncodeStructuredOutput -eq $true) {
         Send-ToCli -MessageType $MessageType -Message @{Error = $null }
     }
+    Write-Log "Importing of images finished."
 }
 
 function Export-NotNamespacedResources {

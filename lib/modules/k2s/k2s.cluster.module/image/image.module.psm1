@@ -115,14 +115,14 @@ function Get-ContainerImagesOnLinuxNode([bool]$IncludeK8sImages = $false) {
     return $linuxContainerImages
 }
 
-function Get-ContainerImagesOnWindowsNode([bool]$IncludeK8sImages = $false, [bool]$WorkerVM = $false) {
+function Get-ContainerImagesOnWindowsNode([bool]$IncludeK8sImages = $false, [bool]$WorkerVM = $false, [string]$crictlExePath = $crictlExe) {
     $output = ''
     $node = ''
     if ($WorkerVM) {
         $output = Invoke-CmdOnVMWorkerNodeViaSSH -CmdToExecute "crictl images" 2> $null
         $node = Get-ConfigVMNodeHostname
     } else {
-        $output = &$crictlExe images 2> $null
+        $output = &$crictlExePath images 2> $null
         $node = $env:ComputerName.ToLower()
     }
 
