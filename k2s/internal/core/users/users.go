@@ -4,63 +4,125 @@
 package users
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 
-	"github.com/siemens-healthineers/k2s/internal/config"
-	"github.com/siemens-healthineers/k2s/internal/host"
-	"github.com/siemens-healthineers/k2s/internal/nodes"
-	"github.com/siemens-healthineers/k2s/internal/ssh"
-	"github.com/siemens-healthineers/k2s/internal/windows/acl"
+	"github.com/samber/lo"
+	"github.com/siemens-healthineers/k2s/internal/core/config"
+	"github.com/siemens-healthineers/k2s/internal/core/users/acl"
+	"github.com/siemens-healthineers/k2s/internal/core/users/common"
+	"github.com/siemens-healthineers/k2s/internal/core/users/fs"
+	"github.com/siemens-healthineers/k2s/internal/core/users/http"
+	"github.com/siemens-healthineers/k2s/internal/core/users/k8s"
+	"github.com/siemens-healthineers/k2s/internal/core/users/k8s/cluster"
+	"github.com/siemens-healthineers/k2s/internal/core/users/k8s/kubeconfig"
+	"github.com/siemens-healthineers/k2s/internal/core/users/nodes"
+	"github.com/siemens-healthineers/k2s/internal/core/users/nodes/keygen"
+	"github.com/siemens-healthineers/k2s/internal/core/users/nodes/scp"
+	"github.com/siemens-healthineers/k2s/internal/core/users/nodes/ssh"
+	"github.com/siemens-healthineers/k2s/internal/core/users/winusers"
 )
 
-type UsersManagementConfig struct {
-	ControlPlaneName     string
-	Config               *config.Config
-	ConfirmOverwriteFunc func() bool
-	StdWriter            host.StdWriter
+type UserProvider interface {
+	FindByName(name string) (*winusers.User, error)
+	FindById(id string) (*winusers.User, error)
+	Current() (*winusers.User, error)
 }
 
-func NewUsersManagement(config *UsersManagementConfig) (*UsersManagement, error) {
-	cmdExecutor := host.NewCmdExecutor(config.StdWriter)
+type userAdder interface {
+	Add(winUser common.User, currentUserName string) error
+}
 
-	ssh := ssh.NewSsh(cmdExecutor)
-	controlPlane, err := nodes.NewControlPlane(ssh, config.Config, config.ControlPlaneName)
-	if err != nil {
-		return nil, fmt.Errorf("could not create control-plane access: %w", err)
+type UserNotFoundErr string
+
+type usersManagement struct {
+	userProvider UserProvider
+	userAdder    userAdder
+}
+
+type kubeconfWriterFactory struct {
+	exec common.CmdExecutor
+}
+
+func DefaultUserProvider() UserProvider {
+	return winusers.NewWinUserProvider()
+}
+
+func NewUsersManagement(controlPlaneName string, cfg *config.Config, cmdExecutor common.CmdExecutor, userProvider UserProvider) (*usersManagement, error) {
+	controlePlaneCfg, found := lo.Find(cfg.Nodes, func(node config.NodeConfig) bool {
+		return node.IsControlPlane
+	})
+	if !found {
+		return nil, errors.New("could not find control-plane node config")
 	}
 
-	accessGranter := &commonAccessGranter{
-		exec:         cmdExecutor,
-		controlPlane: controlPlane,
-		fs:           &winFileSystem{},
+	controlPlaneHost := nodes.ControlPlaneHost{
+		Name:      controlPlaneName,
+		IpAddress: controlePlaneCfg.IpAddress,
 	}
 
-	userFinder := &winUserFinder{}
+	kubeconfigWriterFactory := &kubeconfWriterFactory{
+		exec: cmdExecutor,
+	}
 
-	return &UsersManagement{
-		userFinder: userFinder,
-		userAdder: &winUserAdder{
-			sshAccessGranter:  newSshAccessGranter(accessGranter, config.ConfirmOverwriteFunc, config.Config.Host.SshDir, userFinder),
-			k8sAccessGranter:  newK8sAccessGranter(accessGranter, config.Config.Host.KubeConfigDir),
-			createK2sUserName: CreateK2sUserName,
-		},
+	sshKeyPath := nodes.DetermineSshKeyPath(cfg.Host.SshDir, controlPlaneName)
+	remoteUser := nodes.DetermineSshRemoteUser(controlePlaneCfg.IpAddress)
+	sshExec := ssh.NewSsh(cmdExecutor, sshKeyPath, remoteUser)
+	scpExec := scp.NewScp(cmdExecutor, sshKeyPath, remoteUser)
+	fileSystem := fs.NewFileSystem()
+	keygenExec := keygen.NewSshKeyGen(cmdExecutor, fileSystem)
+	aclExec := acl.NewAcl(cmdExecutor)
+	restClient := http.NewRestClient()
+	kubeconfigReader := kubeconfig.NewKubeconfigReader()
+	controlPlaneAccess := nodes.NewControlPlaneAccess(fileSystem, keygenExec, sshExec, scpExec, aclExec, cfg.Host.SshDir, controlPlaneHost)
+	clusterAccess := cluster.NewClusterAccess(restClient)
+	k8sAccess := k8s.NewK8sAccess(sshExec, scpExec, fileSystem, clusterAccess, kubeconfigWriterFactory, kubeconfigReader, cfg.Host.KubeConfigDir)
+	userAdder := NewWinUserAdder(controlPlaneAccess, k8sAccess, CreateK2sUserName)
+
+	return &usersManagement{
+		userProvider: userProvider,
+		userAdder:    userAdder,
 	}, nil
 }
 
-func newSshAccessGranter(accessGranter *commonAccessGranter, confirmOverwrite func() bool, sshDir string, userFinder currentUserFinder) accessGranter {
-	return &sshAccessGranter{
-		commonAccessGranter: accessGranter,
-		confirmOverwrite:    confirmOverwrite,
-		sshKeyGen:           ssh.NewSshKeyGen(accessGranter.exec, accessGranter.fs),
-		accessControl:       acl.NewAcl(accessGranter.exec),
-		adminSshDir:         sshDir,
-		userFinder:          userFinder,
-	}
+func (k *kubeconfWriterFactory) NewKubeconfigWriter(filePath string) k8s.KubeconfigWriter {
+	return kubeconfig.NewKubeconfigWriter(filePath, k.exec)
 }
 
-func newK8sAccessGranter(accessGranter *commonAccessGranter, kubeconfigDir string) accessGranter {
-	return &k8sAccessGranter{
-		commonAccessGranter: accessGranter,
-		kubeconfigDir:       kubeconfigDir,
+func (e UserNotFoundErr) Error() string {
+	return string(e)
+}
+
+func (m *usersManagement) AddUserByName(name string) error {
+	winUser, err := m.userProvider.FindByName(name)
+	if err != nil {
+		return UserNotFoundErr(err.Error())
 	}
+	return m.add(winUser)
+}
+
+func (m *usersManagement) AddUserById(id string) error {
+	winUser, err := m.userProvider.FindById(id)
+	if err != nil {
+		return UserNotFoundErr(err.Error())
+	}
+	return m.add(winUser)
+}
+
+func (m *usersManagement) add(winUser *winusers.User) error {
+	slog.Debug("Adding Windows user", "name", winUser.Name(), "id", winUser.Id())
+
+	current, err := m.userProvider.Current()
+	if err != nil {
+		return fmt.Errorf("could not determine current Windows user: %w", err)
+	}
+
+	slog.Debug("Current Windows user determined", "name", current.Name(), "id", current.Id())
+
+	if winUser.Id() == current.Id() {
+		return fmt.Errorf("cannot overwrite access of current Windows user (name='%s', id='%s')", current.Name(), current.Id())
+	}
+
+	return m.userAdder.Add(winUser, current.Name())
 }
