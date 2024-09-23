@@ -185,17 +185,8 @@ function Export-UserApplicationImages {
 
                 $nerdctlExe = "$ExePath\nerdctl.exe"
 
-                Write-Log "Trying to pull all platform layers for image '$imageFullName'"
-                $pullOutput = &$nerdctlExe -n 'k8s.io' pull $imageFullName --all-platforms 2>&1 | Out-String
-                if ($pullOutput.Contains('failed to do request')) {
-                    Write-Log "Not able to pull all platform layers for image '$imageFullName'"
-                    Write-Log "Exporting image '$imageFullName' only for current platform"
-                    &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName
-                }
-                else {
-                    Write-Log "Exporting image '$imageFullName' for all platforms"
-                    &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName --all-platforms
-                }
+                Write-Log "Exporting image '$imageFullName' only for current platform"
+                &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName
 
                 if ($?) {
                     Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
