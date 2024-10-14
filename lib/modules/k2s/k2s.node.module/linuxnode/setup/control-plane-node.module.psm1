@@ -84,6 +84,7 @@ function New-ControlPlaneNodeOnNewVM {
 
     Wait-ForSSHConnectionToLinuxVMViaPwd
     New-SshKey -IpAddress $($controlPlaneParams.IpAddress)
+    Add-SshConfig
     Copy-LocalPublicSshKeyToRemoteComputer -UserName $(Get-DefaultUserNameControlPlane) -UserPwd $(Get-DefaultUserPwdControlPlane) -IpAddress $($controlPlaneParams.IpAddress)
     Wait-ForSSHConnectionToLinuxVMViaSshKey
 
@@ -442,6 +443,8 @@ function Remove-ControlPlaneNodeOnNewVM {
     if (!$SkipPurge) {
         Remove-SshKey -IpAddress $ipControlPlane
     }
+
+    Remove-SshConfig
 
     Clear-WinNode -DeleteFilesForOfflineInstallation $DeleteFilesForOfflineInstallation
 

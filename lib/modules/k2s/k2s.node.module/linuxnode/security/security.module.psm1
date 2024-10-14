@@ -44,6 +44,47 @@ function New-SshKey {
     return "$sshKeyControlPlane.pub"
 }
 
+function Add-SshConfig {
+    $file = $sshConfigDir + '\config'
+    if (!(Test-Path $file)) {
+        New-Item -Path $file -ItemType 'File'
+    }
+
+    $config = @'
+Host KubeMaster
+    HostName 172.19.1.100
+    User remote
+    Port 22
+    IdentityFile ~\.ssh\kubemaster\id_rsa
+'@
+
+    Add-Content -Path $file -Value $config
+
+    Write-Log 'Ssh config added'
+
+}
+
+function Remove-SshConfig {
+    $file = $sshConfigDir + '\config'
+    if ((Test-Path $file)) {
+        $config = @(
+            "Host KubeMaster",
+            "    HostName 172.19.1.100",
+            "    User remote",
+            "    Port 22",
+            "    IdentityFile ~\.ssh\kubemaster\id_rsa"
+        )
+        $content = Get-Content $file
+
+        $filteredContent = foreach ($line in $content) {
+            if ($config -notcontains $line) {
+                $line
+            }
+        }
+        Set-Content -Path $file -Value $filteredContent
+    }
+}
+
 function Remove-SshKey {
     param (
         [string]$IpAddress = $(throw "Argument missing: IpAddress")
@@ -101,8 +142,8 @@ function Remove-VmAccessViaUserAndPwd {
     (Invoke-CmdOnVmViaSSHKey 'sudo systemctl reload ssh' -IpAddress $IpAddress).Output | Write-Log
 }
 
-Export-ModuleMember New-SshKey, 
+Export-ModuleMember New-SshKey, Add-SshConfig, 
 Remove-SshKey, 
 Copy-LocalPublicSshKeyToRemoteComputer, 
-Remove-ControlPlaneAccessViaUserAndPwd,
+Remove-ControlPlaneAccessViaUserAndPwd, Remove-SshConfig,
 Remove-VmAccessViaUserAndPwd
