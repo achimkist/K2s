@@ -29,9 +29,10 @@ Param (
 $infraModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.infra.module/k2s.infra.module.psm1"
 $clusterModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $addonsModule = "$PSScriptRoot\..\..\addons.module.psm1"
-$commonModule = "$PSScriptRoot\common.module.psm1"
+$addonsIngressModule = "$PSScriptRoot\..\..\addons.ingress.module.psm1"
+$traefikModule = "$PSScriptRoot\traefik.module.psm1"
 
-Import-Module $infraModule, $clusterModule, $addonsModule, $commonModule
+Import-Module $infraModule, $clusterModule, $addonsModule, $addonsIngressModule, $traefikModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -98,16 +99,16 @@ Write-Log 'Installing external-dns' -Console
 $externalDnsConfig = Get-ExternalDnsConfigDir
 (Invoke-Kubectl -Params 'apply' , '-k', $externalDnsConfig).Output | Write-Log
 
-Write-Log "Preparing kustomization with $controlPlaneIp as an external IP for traefik service" -Console
 
 # we prepare all patches and apply them in a single kustomization,
 # instead of applying the unpatched manifests and then applying patches one by one
 $controlPlaneIp = Get-ConfiguredIPControlPlane
+Write-Log "Preparing kustomization with $controlPlaneIp as an external IP for traefik service" -Console
 $kustomization = @"
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-bases:
+resources:
 - ../manifests
 
 patches:
@@ -166,6 +167,9 @@ $clusterIngressConfig = "$PSScriptRoot\manifests\cluster-local-ingress.yaml"
 (Invoke-Kubectl -Params 'apply' , '-f', $clusterIngressConfig).Output | Write-Log
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'ingress'; Implementation = 'traefik' })
+
+# adapt ingress for other addons
+Update-IngressForAddons
 
 Write-Log 'Installation of Traefik addon finished.' -Console
 

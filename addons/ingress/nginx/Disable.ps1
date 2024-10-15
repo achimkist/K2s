@@ -27,9 +27,10 @@ Param(
 $clusterModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $infraModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.infra.module/k2s.infra.module.psm1"
 $addonsModule = "$PSScriptRoot\..\..\addons.module.psm1"
-$commonModule = "$PSScriptRoot\common.module.psm1"
+$addonsIngressModule = "$PSScriptRoot\..\..\addons.ingress.module.psm1"
+$nginxModule = "$PSScriptRoot\nginx.module.psm1"
 
-Import-Module $clusterModule, $infraModule, $addonsModule, $commonModule
+Import-Module $clusterModule, $infraModule, $addonsModule, $addonsIngressModule, $nginxModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -72,6 +73,10 @@ $externalDnsConfigDir = Get-ExternalDnsConfigDir
 (Invoke-Kubectl -Params 'delete', '-k', $externalDnsConfigDir).Output | Write-Log
 
 Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = 'ingress'; Implementation = 'nginx' })
+
+# adapt ingress for other addons
+Update-IngressForAddons
+
 
 if ($EncodeStructuredOutput -eq $true) {
     Send-ToCli -MessageType $MessageType -Message @{Error = $null }

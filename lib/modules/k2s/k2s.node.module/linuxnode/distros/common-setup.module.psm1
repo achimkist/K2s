@@ -92,29 +92,34 @@ Function Set-UpComputerAfterProvisioning {
 Function Install-KubernetesArtifacts {
     param (
         [ValidateScript({ !([string]::IsNullOrWhiteSpace($_)) })]
-        [string]$UserName = $(throw 'Argument missing: UserName'),
-        [string]$UserPwd = $(throw 'Argument missing: UserPwd'),
+        [string] $UserName = $(throw 'Argument missing: UserName'),
+        [string] $UserPwd = '',
         [ValidateScript({ Get-IsValidIPv4Address($_) })]
-        [string]$IpAddress = $(throw 'Argument missing: IpAddress'),
+        [string] $IpAddress = $(throw 'Argument missing: IpAddress'),
         [string] $Proxy = '',
         [ValidateScript({ !([string]::IsNullOrWhiteSpace($_)) })]
         [string] $K8sVersion = $(throw 'Argument missing: K8sVersion')
     )
     $remoteUser = "$UserName@$IpAddress"
-    $remoteUserPwd = $UserPwd
 
     $executeRemoteCommand = { 
         param(
             $command = $(throw 'Argument missing: Command'), 
             [switch]$IgnoreErrors = $false, [string]$RepairCmd = $null, [uint16]$Retries = 0
         )
-        if ($IgnoreErrors) {
-            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute $command -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -Retries $Retries -IgnoreErrors).Output | Write-Log
-        }
-        else {
-            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute $command -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -Retries $Retries -RepairCmd $RepairCmd).Output | Write-Log
+        if ([string]::IsNullOrWhiteSpace($UserPwd)) {
+            (Invoke-CmdOnVmViaSSHKey -CmdToExecute $command -UserName $UserName -IpAddress $IpAddress -Retries $Retries -RepairCmd $RepairCmd -IgnoreErrors:$IgnoreErrors).Output | Write-Log
+        } else {
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute $command -RemoteUser "$remoteUser" -RemoteUserPwd "$UserPwd" -Retries $Retries -RepairCmd $RepairCmd -IgnoreErrors:$IgnoreErrors).Output | Write-Log
         }
     }
+    
+    Write-Log "Copying ZScaler Root CA certificate to KUBENODE_IN_PROVISIONING VM"
+    $Provisioning_Node_IPAddress = Get-VmIpForProvisioningKubeNode
+    Copy-ToRemoteComputerViaUserAndPwd -Source "$(Get-KubePath)\lib\modules\k2s\k2s.node.module\linuxnode\setup\certificate\ZScalerRootCA.crt" -Target "/tmp/ZScalerRootCA.crt" -IpAddress $Provisioning_Node_IPAddress            
+    &$executeRemoteCommand "sudo mv /tmp/ZScalerRootCA.crt /usr/local/share/ca-certificates/"
+    &$executeRemoteCommand "sudo update-ca-certificates"       
+    Write-Log "Zscaler certificate added to CA certificates of KUBENODE_IN_PROVISIONING VM" 
 
     Write-Log 'Configure bridged traffic'
     &$executeRemoteCommand 'echo overlay | sudo tee /etc/modules-load.d/k8s.conf' 
@@ -152,7 +157,7 @@ Function Install-KubernetesArtifacts {
     &$executeRemoteCommand 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -qq --yes apt-transport-https ca-certificates curl' -Retries 2 -RepairCmd 'sudo apt --fix-broken install'
 
     Write-Log 'Install cri-o'
-    InstallAptPackages -FriendlyName 'cri-o' -Packages 'cri-o' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" 
+    InstallAptPackages -FriendlyName 'cri-o' -Packages 'cri-o' -UserName $UserName -UserPwd $UserPwd -IpAddress $IpAddress
     &$executeRemoteCommand 'sudo apt-mark hold cri-o'
 
     # increase timeout for crictl to connect to crio.sock
@@ -209,16 +214,8 @@ Function Install-KubernetesArtifacts {
 
     Write-Log 'Install kubetools (kubelet, kubeadm, kubectl)'
     &$executeRemoteCommand 'sudo apt-get update' 
-    InstallAptPackages -FriendlyName 'kubernetes' -Packages "kubelet=$shortKubeVers kubeadm=$shortKubeVers kubectl=$shortKubeVers" -TestExecutable 'kubectl' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" 
+    InstallAptPackages -FriendlyName 'kubernetes' -Packages "kubelet=$shortKubeVers kubeadm=$shortKubeVers kubectl=$shortKubeVers" -TestExecutable 'kubectl' -UserName $UserName -UserPwd $UserPwd -IpAddress $IpAddress
     &$executeRemoteCommand 'sudo apt-mark hold kubelet kubeadm kubectl' 
-
-    # Write-Log 'Configure CRI-O (part 2 of 2): adapt CRI-O config file to use pause image version specified by kubeadm' 
-    # if ($PSVersionTable.PSVersion.Major -gt 5) {
-    #     &$executeRemoteCommand "pauseImageToUse=`"`$(kubeadm config images list --kubernetes-version $K8sVersion | grep `"pause`")`" && newTextLine=`$(echo pause_image = '`"'`$pauseImageToUse'`"') && sudo sed -i `"s#.*pause_image[ ]*=.*pause.*#`$newTextLine#`" /etc/crio/crio.conf" 
-    # }
-    # else {
-    #     &$executeRemoteCommand "pauseImageToUse=`"`$(kubeadm config images list --kubernetes-version $K8sVersion | grep \`"pause\`")`" && newTextLine=`$(echo pause_image = '\`"'`$pauseImageToUse'\`"') && sudo sed -i \`"s#.*pause_image[ ]*=.*pause.*#`$newTextLine#\`" /etc/crio/crio.conf" 
-    # }
 
     Write-Log 'Start CRI-O'
     &$executeRemoteCommand 'sudo systemctl daemon-reload' 
@@ -230,7 +227,6 @@ Function Install-KubernetesArtifacts {
     if ( $isWsl ) {
         Write-Log 'Add cri-o fix for WSL'
         $configWSL = '/etc/crio/crio.conf.d/20-wsl.conf'
-        # add to /etc/crio/crio.conf.d/20-wsl.conf the following line:  [crio.runtime]
         &$executeRemoteCommand "echo [crio.runtime] | sudo tee -a $configWSL > /dev/null"
         &$executeRemoteCommand "echo add_inheritable_capabilities=true | sudo tee -a $configWSL > /dev/null"
         &$executeRemoteCommand "echo default_sysctls='[\`"net.ipv4.ip_unprivileged_port_start=0\`"]' | sudo tee -a $configWSL > /dev/null"
@@ -641,6 +637,41 @@ Function Set-UpMasterNode {
 
 }
 
+Function Set-UpWorkerNode {
+    param (
+        [ValidateScript({ !([string]::IsNullOrWhiteSpace($_)) })]
+        [string]$UserName = $(throw 'Argument missing: UserName'),
+        [string]$UserPwd = $(throw 'Argument missing: UserPwd'),
+        [ValidateScript({ Get-IsValidIPv4Address($_) })]
+        [string]$IpAddress = $(throw 'Argument missing: IpAddress'),
+        [ScriptBlock] $Hook = $(throw 'Argument missing: Hook')
+    )
+
+    $remoteUser = "$UserName@$IpAddress"
+    $remoteUserPwd = $UserPwd
+
+    $executeRemoteCommand = { 
+        param(
+            $command = $(throw 'Argument missing: Command'), 
+            [switch]$IgnoreErrors = $false
+        ) 
+        if ($IgnoreErrors) {
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute $command -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -IgnoreErrors).Output | Write-Log
+        }
+        else {
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute $command -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd").Output | Write-Log
+        }
+    }
+
+    Write-Log "Start setting up computer '$IpAddress' as worker node"
+
+    Write-Log 'Run setup hook'
+    &$Hook
+    Write-Log 'Setup hook finished'
+
+    Write-Log 'Finished setting up Linux computer for being used as worker node'
+}
+
 Function Add-FlannelPluginToMasterNode {
     param (
         [ValidateScript({ !([string]::IsNullOrWhiteSpace($_)) })]
@@ -942,24 +973,61 @@ function New-LinuxVmImageForWorkerNode {
         [parameter(Mandatory = $false, HelpMessage = 'Number of Virtual Processors for VM')]
         [long]$VMProcessorCount,
         [parameter(Mandatory = $false, HelpMessage = 'Virtual hard disk size of VM')]
-        [uint64]$VMDiskSize
+        [uint64]$VMDiskSize,
+        [parameter(Mandatory = $false, HelpMessage = 'Deletes the needed files to perform an offline installation')]
+        [Boolean] $DeleteFilesForOfflineInstallation = $false,
+        [parameter(Mandatory = $false, HelpMessage = 'Forces the installation online')]
+        [Boolean] $ForceOnlineInstallation = $false
     )
 
     $kubenodeBaseImagePath = "$(Split-Path $VmImageOutputPath)\$(Get-KubenodeBaseFileName)"
+    
+    $isKubenodeBaseImageAlreadyAvailable = (Test-Path $kubenodeBaseImagePath)
+    $isOnlineInstallation = (!$isKubenodeBaseImageAlreadyAvailable -or $ForceOnlineInstallation)
 
-    if (!(Test-Path -Path $kubenodeBaseImagePath)) {
-        New-VmImageForKubernetesNode -VmImageOutputPath $kubenodeBaseImagePath -Proxy $Proxy
+    if ($isOnlineInstallation -and $isKubenodeBaseImageAlreadyAvailable) {
+        Remove-Item -Path $kubenodeBaseImagePath -Force
     }
 
-    $vmNetworkInterfaceName = Get-NetworkInterfaceName
+    if (!(Test-Path -Path $kubenodeBaseImagePath)) {
+        $vmImageForKubernetesNodeCreationParams = @{
+            Proxy                = $Proxy
+            DnsIpAddresses       = $DnsServers
+            VmImageOutputPath    = $kubenodeBaseImagePath
+            VMMemoryStartupBytes = $VMMemoryStartupBytes
+            VMProcessorCount     = $VMProcessorCount
+            VMDiskSize           = $VMDiskSize
+        }
+        New-VmImageForKubernetesNode @vmImageForKubernetesNodeCreationParams
+    }
+
     $vmUserName = Get-DefaultUserNameKubeNode
     $vmUserPwd = Get-DefaultUserPwdKubeNode
+    $vmNetworkInterfaceName = Get-NetworkInterfaceName
 
-    $performConfiguration = {
-        Set-Nameserver -IpAddress $IpAddress -UserName $vmUserName -UserPwd $vmUserPwd
+    $remoteUser = "$vmUserName@$IpAddress"
+    $remoteUserPwd = $vmUserPwd
+
+    $setUpAsWorkerNode = {
+        $executeInWorkerNode = {
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute 'sudo systemctl stop dnsmasq; sudo systemctl disable dnsmasq' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -IgnoreErrors).Output | Write-Log
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute 'sudo chattr -i /etc/resolv.conf' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -IgnoreErrors).Output | Write-Log
+            (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "echo nameserver $(Get-ConfiguredIPControlPlane) | sudo tee /etc/resolv.conf" -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd" -IgnoreErrors).Output | Write-Log
+        }
+
+        $workerNodeParams = @{
+            IpAddress                     = $IpAddress
+            UserName                      = $vmUserName
+            UserPwd                       = $vmUserPwd
+            Hook                          = $executeInWorkerNode
+        }
+        Set-UpWorkerNode @workerNodeParams 
     }
 
     $kubeworkerCreationParams = @{
+        VMMemoryStartupBytes = $VMMemoryStartupBytes
+        VMProcessorCount     = $VMProcessorCount
+        VMDiskSize           = $VMDiskSize
         Hostname             = $Hostname
         IpAddress            = $IpAddress
         InterfaceName        = $vmNetworkInterfaceName
@@ -967,12 +1035,13 @@ function New-LinuxVmImageForWorkerNode {
         GatewayIpAddress     = $GatewayIpAddress
         InputPath            = $kubenodeBaseImagePath
         OutputPath           = $VmImageOutputPath
-        Hook                 = $performConfiguration
-        VMMemoryStartupBytes = $VMMemoryStartupBytes
-        VMProcessorCount     = $VMProcessorCount
-        VMDiskSize           = $VMDiskSize
+        Hook                 = $setUpAsWorkerNode
     }
     New-KubeworkerBaseImage @kubeworkerCreationParams
+
+    if ($DeleteFilesForOfflineInstallation) {
+        Remove-Item -Path $kubenodeBaseImagePath -Force
+    }
 
 }
 
@@ -1004,21 +1073,34 @@ InstallAptPackages install apt package to master VM.
 function InstallAptPackages {
     param (
         [Parameter(Mandatory)]
-        [string]$FriendlyName,
+        [string] $FriendlyName,
         [Parameter(Mandatory)]
-        [string]$Packages,
+        [string] $Packages,
         [Parameter(Mandatory = $false)]
-        [string]$TestExecutable = '',
-        [Parameter(Mandatory = $false)]
-        [string]$RemoteUser,
-        [Parameter(Mandatory = $false)]
-        [string]$RemoteUserPwd
+        [string] $TestExecutable = '',
+        [string] $UserName = $(throw 'Argument missing: UserName'),
+        [string] $UserPwd = '',
+        [string] $IpAddress = $(throw 'Argument missing: IpAddress')
     )
+
+    $remoteUser = "$UserName@$IpAddress"
+
     Write-Log "installing needed apt packages for $FriendlyName..."
-    (Invoke-CmdOnControlPlaneViaUserAndPwd "sudo DEBIAN_FRONTEND=noninteractive apt-get install -qq --yes --fix-missing $Packages" -Retries 2 -Timeout 2 -RemoteUser "$RemoteUser" -RemoteUserPwd "$RemoteUserPwd" -RepairCmd 'sudo apt --fix-broken install').Output | Write-Log
+    $installCmd = "sudo DEBIAN_FRONTEND=noninteractive apt-get install -qq --yes --allow-change-held-packages --fix-missing $Packages"
+    $repairCmd = 'sudo apt --fix-broken install'
+    if ([string]::IsNullOrWhiteSpace($UserPwd)) {
+        (Invoke-CmdOnVmViaSSHKey $installCmd -Retries 2 -Timeout 2 -UserName $UserName -IpAddress $IpAddress -RepairCmd $repairCmd).Output | Write-Log
+    } else {
+        (Invoke-CmdOnControlPlaneViaUserAndPwd $installCmd -Retries 2 -Timeout 2 -RemoteUser "$remoteUser" -RemoteUserPwd "$UserPwd" -RepairCmd $repairCmd).Output | Write-Log
+    }
 
     if ($TestExecutable -ne '') {
-        $exeInstalled = (Invoke-CmdOnControlPlaneViaUserAndPwd "which $TestExecutable" -RemoteUser "$RemoteUser" -RemoteUserPwd "$RemoteUserPwd").Output
+        $testCmd = "which $TestExecutable"
+        if ([string]::IsNullOrWhiteSpace($UserPwd)) {
+            $exeInstalled = (Invoke-CmdOnVmViaSSHKey $testCmd -UserName $UserName -IpAddress $IpAddress).Output
+        } else {
+            $exeInstalled = (Invoke-CmdOnControlPlaneViaUserAndPwd $testCmd -RemoteUser "$remoteUser" -RemoteUserPwd "$UserPwd").Output
+        }
         if (!($exeInstalled -match "/bin/$TestExecutable")) {
             throw "'$FriendlyName' was not installed correctly"
         }
@@ -1111,7 +1193,9 @@ function Set-ProxySettingsOnKubenode {
         [AllowEmptyString()]
         [string] $ProxySettings,
         [Parameter(Mandatory = $false)]
-        [string]$IpAddress = $(throw 'Argument missing: IpAddress')
+        [string] $IpAddress = $(throw 'Argument missing: IpAddress'),
+        [string] $UserName = $(throw "Argument missing: UserName")
+
     )
 
     $removeProxySettings = [string]::IsNullOrWhiteSpace($ProxySettings)
@@ -1122,58 +1206,57 @@ function Set-ProxySettingsOnKubenode {
     # packages
     if ($removeProxySettings) {
         Write-Log 'Delete proxy settings for package tool'
-        (Invoke-CmdOnVmViaSSHKey 'sudo rm -f /etc/apt/apt.conf.d/proxy.conf' -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo rm -f /etc/apt/apt.conf.d/proxy.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
     }
     else {
         Write-Log 'Set proxy settings for package tool'
-        (Invoke-CmdOnVmViaSSHKey 'sudo touch /etc/apt/apt.conf.d/proxy.conf' -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo touch /etc/apt/apt.conf.d/proxy.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         if ($PSVersionTable.PSVersion.Major -gt 5) {
-            (Invoke-CmdOnVmViaSSHKey "echo Acquire::http::Proxy \""$ProxySettings\""\; | sudo tee -a /etc/apt/apt.conf.d/proxy.conf" -IpAddress $IpAddress).Output | Write-Log
+            (Invoke-CmdOnVmViaSSHKey "echo Acquire::http::Proxy \""$ProxySettings\""\; | sudo tee -a /etc/apt/apt.conf.d/proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         }
         else {
-            (Invoke-CmdOnVmViaSSHKey "echo Acquire::http::Proxy \\\""$ProxySettings\\\""\; | sudo tee -a /etc/apt/apt.conf.d/proxy.conf" -IpAddress $IpAddress).Output | Write-Log
+            (Invoke-CmdOnVmViaSSHKey "echo Acquire::http::Proxy \\\""$ProxySettings\\\""\; | sudo tee -a /etc/apt/apt.conf.d/proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         }
     }
 
     # Container runtime
     if ($removeProxySettings) {
         Write-Log 'Delete proxy settings for container runtime'
-        (Invoke-CmdOnVmViaSSHKey 'sudo rm -fr /etc/systemd/system/crio.service.d' -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo rm -fr /etc/systemd/system/crio.service.d' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
     }
     else {
         Write-Log 'Set proxy settings for container runtime'
-        (Invoke-CmdOnVmViaSSHKey 'sudo mkdir -p /etc/systemd/system/crio.service.d' -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey 'sudo touch /etc/systemd/system/crio.service.d/http-proxy.conf' -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey 'echo [Service] | sudo tee /etc/systemd/system/crio.service.d/http-proxy.conf' -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'HTTP_PROXY=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'HTTPS_PROXY=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'http_proxy=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'https_proxy=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -IpAddress $IpAddress).Output | Write-Log
-        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'no_proxy=.local\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo mkdir -p /etc/systemd/system/crio.service.d' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo touch /etc/systemd/system/crio.service.d/http-proxy.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'echo [Service] | sudo tee /etc/systemd/system/crio.service.d/http-proxy.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'HTTP_PROXY=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'HTTPS_PROXY=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'http_proxy=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'https_proxy=$ProxySettings\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey "echo Environment=\'no_proxy=.local\' | sudo tee -a /etc/systemd/system/crio.service.d/http-proxy.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
     }
 
     # Containers
     if ($removeProxySettings) {
         Write-Log 'Delete proxy settings for containers'
-        (Invoke-CmdOnVmViaSSHKey 'sudo rm -f /etc/containers/containers.conf' -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'sudo rm -f /etc/containers/containers.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
     }
     else {
         Write-Log 'Set proxy settings for containers'
-        (Invoke-CmdOnVmViaSSHKey 'echo [engine] | sudo tee /etc/containers/containers.conf' -IpAddress $IpAddress).Output | Write-Log
+        (Invoke-CmdOnVmViaSSHKey 'echo [engine] | sudo tee /etc/containers/containers.conf' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         if ($PSVersionTable.PSVersion.Major -gt 5) {
-            (Invoke-CmdOnVmViaSSHKey "echo env = [\""https_proxy=$ProxySettings\""] | sudo tee -a /etc/containers/containers.conf" -IpAddress $IpAddress).Output | Write-Log
+            (Invoke-CmdOnVmViaSSHKey "echo env = [\""https_proxy=$ProxySettings\""] | sudo tee -a /etc/containers/containers.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         }
         else {
-            (Invoke-CmdOnVmViaSSHKey "echo env = [\\\""https_proxy=$ProxySettings\\\""] | sudo tee -a /etc/containers/containers.conf" -IpAddress $IpAddress).Output | Write-Log
+            (Invoke-CmdOnVmViaSSHKey "echo env = [\\\""https_proxy=$ProxySettings\\\""] | sudo tee -a /etc/containers/containers.conf" -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
         }
     }
 
-    (Invoke-CmdOnVmViaSSHKey 'sudo systemctl daemon-reload' -IpAddress $IpAddress).Output | Write-Log
-    (Invoke-CmdOnVmViaSSHKey 'sudo systemctl restart crio' -IpAddress $IpAddress).Output | Write-Log
+    (Invoke-CmdOnVmViaSSHKey 'sudo systemctl daemon-reload' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
+    (Invoke-CmdOnVmViaSSHKey 'sudo systemctl restart crio' -UserName $UserName -IpAddress $IpAddress).Output | Write-Log
 }
 
-Export-ModuleMember -Function New-VmImageForKubernetesNode, 
-New-VmImageForControlPlaneNode, 
+Export-ModuleMember -Function New-VmImageForControlPlaneNode, 
 New-LinuxVmImageForWorkerNode, 
 Remove-VmImageForControlPlaneNode, 
 Import-SpecificDistroSettingsModule, 

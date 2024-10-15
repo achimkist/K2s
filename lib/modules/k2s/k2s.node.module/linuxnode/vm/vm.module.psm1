@@ -34,9 +34,10 @@ function Invoke-SSHWithKey {
         [switch]
         $Nested,
         [Parameter(Mandatory = $false)]
-        [string]$IpAddress = $ipControlPlane
+        [string] $IpAddress = $ipControlPlane,
+        [string] $UserName = $defaultUserName
     )
-    $userOnRemoteMachine = "$defaultUserName@$IpAddress"
+    $userOnRemoteMachine = "$UserName@$IpAddress"
     $params = '-n', '-o', 'StrictHostKeyChecking=no', '-i', $key, $userOnRemoteMachine, $Command
 
     if ($Nested -eq $true) {
@@ -92,7 +93,8 @@ function Invoke-CmdOnVmViaSSHKey(
     [Parameter(Mandatory = $false, HelpMessage = 'repair CMD for the case first run did not work out')]
     [string]$RepairCmd = $null,
     [Parameter(Mandatory = $false)]
-    [string]$IpAddress = $(throw 'Argument missing: IpAddress')) {
+    [string]$IpAddress = $(throw 'Argument missing: IpAddress'),
+    [string]$UserName = $defaultUserName) {
 
     if (!$NoLog) {
         Write-Log "cmd: $CmdToExecute, retries: $Retries, timeout: $Timeout sec, ignore err: $IgnoreErrors, nested: $Nested, ip address: $IpAddress"
@@ -101,7 +103,7 @@ function Invoke-CmdOnVmViaSSHKey(
     [uint16]$Retrycount = 1
     do {
         try {
-            $output = Invoke-SSHWithKey -Command $CmdToExecute -Nested:$Nested -IpAddress $IpAddress
+            $output = Invoke-SSHWithKey -Command $CmdToExecute -Nested:$Nested -UserName $UserName -IpAddress $IpAddress
             $success = ($LASTEXITCODE -eq 0)
 
             if (!$success -and !$IgnoreErrors) {
@@ -120,7 +122,7 @@ function Invoke-CmdOnVmViaSSHKey(
                 if ($null -ne $RepairCmd -and !$IgnoreErrors) {
                     Write-Log "Executing repair cmd: $RepairCmd"
 
-                    Invoke-SSHWithKey -Command $RepairCmd -Nested:$Nested -IpAddress $IpAddress
+                    Invoke-SSHWithKey -Command $RepairCmd -Nested:$Nested -UserName $UserName -IpAddress $IpAddress
                 }
 
                 Start-Sleep -Seconds $Timeout
@@ -386,15 +388,17 @@ function Test-ControlPlanePrerequisites(
 }
 
 function Test-ExistingExternalSwitch {
-    $externalSwitches = Get-VMSwitch | Where-Object { $_.SwitchType -eq 'External' }
+    $l2BridgeSwitchName = Get-L2BridgeSwitchName
+    $externalSwitches = Get-VMSwitch | Where-Object { $_.SwitchType -eq 'External' -and $_.Name -ne $l2BridgeSwitchName}
     if ($externalSwitches) {
         Write-Log 'Found External Switches:'
         Write-Log $($externalSwitches | Select-Object -Property Name)
         Write-Log 'Precheck failed: Cannot proceed further with existing External Network Switches as it conflicts with k2s networking' -Console
-        Write-Log "Remove all your External Network Switches with command PS>Get-VMSwitch | Where-Object { `$_.SwitchType -eq 'External' } | Remove-VMSwitch -Force" -Console
+        Write-Log "Remove all your External Network Switches with command PS>Get-VMSwitch | Where-Object { `$_.SwitchType -eq 'External'  -and `$_.Name -ne '$l2BridgeSwitchName'} | Remove-VMSwitch -Force" -Console
         Write-Log 'WARNING: This will remove your External Switches, please check whether these switches are required before executing the command' -Console
         throw '[PREREQ-FAILED] Remove all the existing External Network Switches and retry the k2s command again'
     }
+
 }
 
 function Get-IsLinuxOsDebian {
@@ -553,10 +557,12 @@ function Wait-ForSSHConnectionToLinuxVMViaPwd(
 #>
 function Wait-ForSSHConnectionToLinuxVMViaSshKey {
     Param(
+        [Parameter(Mandatory = $false)]
+        [string]$User = $remoteUser,
         [parameter(Mandatory = $false, HelpMessage = 'When executing ssh.exe in nested environment[host=>VM=>VM], -n flag should not be used.')]
         [switch] $Nested = $false
     )
-    Wait-ForSshPossible -User $remoteUser -SshKey $key -SshTestCommand 'which curl' -ExpectedSshTestCommandResult '/bin/curl' -Nested:$Nested
+    Wait-ForSshPossible -User $User -SshKey $key -SshTestCommand 'which curl' -ExpectedSshTestCommandResult '/bin/curl' -Nested:$Nested
 }
 
 function Get-DefaultUserNameControlPlane {
@@ -564,6 +570,14 @@ function Get-DefaultUserNameControlPlane {
 }
 
 function Get-DefaultUserPwdControlPlane {
+    return $remotePwd
+}
+
+function Get-DefaultUserNameWorkerNode {
+    return $defaultUserName
+}
+
+function Get-DefaultUserPwdWorkerNode {
     return $remotePwd
 }
 
@@ -616,7 +630,6 @@ function Get-ControlPlaneRemoteUser {
 Export-ModuleMember -Function Invoke-CmdOnControlPlaneViaSSHKey,
 Invoke-CmdOnVmViaSSHKey,
 Invoke-CmdOnControlPlaneViaUserAndPwd,
-Invoke-TerminalOnControlPanelViaSSHKey,
 Get-IsControlPlaneRunning,
 Copy-FromControlPlaneViaSSHKey,
 Copy-FromRemoteComputerViaUserAndPwd,
@@ -625,8 +638,6 @@ Copy-ToControlPlaneViaUserAndPwd,
 Copy-ToRemoteComputerViaUserAndPwd,
 Test-ControlPlanePrerequisites,
 Test-ExistingExternalSwitch,
-Get-LinuxOsType,
-Get-IsLinuxOsDebian,
 Get-ControlPlaneVMBaseImagePath,
 Get-ControlPlaneVMRootfsPath,
 Wait-ForSSHConnectionToLinuxVMViaPwd,
@@ -634,6 +645,7 @@ Wait-ForSSHConnectionToLinuxVMViaSshKey,
 Wait-ForSshPossible,
 Get-DefaultUserNameControlPlane,
 Get-DefaultUserPwdControlPlane,
+Get-DefaultUserNameWorkerNode,
+Get-DefaultUserPwdWorkerNode,
 Copy-KubeConfigFromControlPlaneNode,
-Get-ControlPlaneRemoteUser,
-Invoke-SSHWithKey
+Get-ControlPlaneRemoteUser

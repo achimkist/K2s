@@ -33,9 +33,10 @@ $infraModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.infra.module/k2s.infra.m
 $clusterModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $nodeModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.node.module/k2s.node.module.psm1"
 $addonsModule = "$PSScriptRoot\..\addons.module.psm1"
+$addonsIngressModule = "$PSScriptRoot\..\addons.ingress.module.psm1"
 $loggingModule = "$PSScriptRoot\logging.module.psm1"
 
-Import-Module $infraModule, $clusterModule, $addonsModule, $nodeModule, $loggingModule
+Import-Module $infraModule, $clusterModule, $addonsModule, $addonsIngressModule, $nodeModule, $loggingModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -84,7 +85,7 @@ Write-Log 'Installing fluent-bit and opensearch stack' -Console
 # opensearch dashboards
 # fluent-bit linux
 
-$manifestsPath = "$PSScriptRoot\manifests"
+$manifestsPath = "$PSScriptRoot\manifests\logging"
 
 (Invoke-Kubectl -Params 'apply', '-f', "$manifestsPath\namespace.yaml").Output | Write-Log
 (Invoke-Kubectl -Params 'create', '-k', "$manifestsPath\").Output | Write-Log
@@ -93,6 +94,8 @@ $manifestsPath = "$PSScriptRoot\manifests"
 if ($setupInfo.LinuxOnly -eq $false) {
     (Invoke-Kubectl -Params 'create', '-k', "$manifestsPath\fluentbit\windows").Output | Write-Log
 }
+
+Update-IngressForAddon -Addon ([pscustomobject] @{Name = 'logging' })
 
 Write-Log 'Waiting for pods being ready...' -Console
 $kubectlCmd = (Invoke-Kubectl -Params 'rollout', 'status', 'deployments', '-n', 'logging', '--timeout=300s')
@@ -141,7 +144,7 @@ if (!$kubectlCmd.Success) {
 $dashboardIP = (Invoke-Kubectl -Params 'get', 'pods', '-l=app.kubernetes.io/name=opensearch-dashboards', '-n', 'logging', '-o=jsonpath="{.items[0].status.podIP}"').Output
 $dashboardIP = $dashboardIP -replace '"', ''
 
-$importingSavedObjects = curl.exe -X POST --retry 10 --retry-delay 5 --silent --disable --fail --retry-all-errors "http://${dashboardIP}:5601/api/saved_objects/_import?overwrite=true" -H 'osd-xsrf: true' -F "file=@$PSScriptRoot/opensearch-dashboard-saved-objects/k2s-index-pattern.ndjson" 2>$null
+$importingSavedObjects = curl.exe -X POST --retry 10 --retry-delay 5 --silent --disable --fail --retry-all-errors "http://${dashboardIP}:5601/logging/api/saved_objects/_import?overwrite=true" -H 'osd-xsrf: true' -F "file=@$PSScriptRoot/opensearch-dashboard-saved-objects/k2s-index-pattern.ndjson" 2>$null
 Write-Log $importingSavedObjects
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'logging' })

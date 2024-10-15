@@ -26,9 +26,10 @@ Param (
 $clusterModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $infraModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.infra.module/k2s.infra.module.psm1"
 $addonsModule = "$PSScriptRoot\..\addons.module.psm1"
-$commonModule = "$PSScriptRoot\common.module.psm1"
+$addonsIngressModule = "$PSScriptRoot\..\addons.ingress.module.psm1"
+$dashboardModule = "$PSScriptRoot\dashboard.module.psm1"
 
-Import-Module $clusterModule, $infraModule, $addonsModule, $commonModule
+Import-Module $clusterModule, $infraModule, $addonsModule, $addonsIngressModule, $dashboardModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -59,13 +60,12 @@ if ($null -eq (Invoke-Kubectl -Params 'get', 'namespace', 'dashboard', '--ignore
 }
 
 Write-Log 'Uninstalling Kubernetes dashboard' -Console
+Remove-IngressForTraefik -Addon ([pscustomobject] @{Name = 'dashboard' })
+Remove-IngressForNginx -Addon ([pscustomobject] @{Name = 'dashboard' })
 $dashboardConfig = Get-DashboardConfig
-$dashboardNginxIngressConfig = Get-DashboardNginxConfig
+(Invoke-Kubectl -Params 'delete', '-k', $dashboardConfig).Output | Write-Log
 
-(Invoke-Kubectl -Params 'delete', '-f', $dashboardConfig).Output | Write-Log
-(Invoke-Kubectl -Params 'delete', '-f', $dashboardNginxIngressConfig, '--ignore-not-found').Output | Write-Log
-
-Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = 'dashboard'})
+Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = 'dashboard' })
 Write-Log 'Uninstallation of Kubernetes dashboard finished' -Console
 
 if ($EncodeStructuredOutput -eq $true) {
