@@ -498,7 +498,16 @@ function Wait-ForSshPossible {
             }
         }
         else {
+
+            $command = "Write-Output y | &`"$plinkExe`" -ssh -4 $User -pw $UserPwd -no-antispoof `"$($SshTestCommand)`" 2>&1"
+
+            Write-Log "command executed"
+            Write-Log "$command"
+
             $result = $(Write-Output y | &"$plinkExe" -ssh -4 $User -pw $UserPwd -no-antispoof "$($SshTestCommand)" 2>&1)
+
+            Write-Log "command output"
+            Write-Log $result
         }
 
         if ($StrictEqualityCheck -eq $true) {
