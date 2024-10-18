@@ -18,6 +18,7 @@ $dockerExe = "$kubeBinPath\docker\docker.exe"
 $nerdctlExe = "$kubeBinPath\nerdctl.exe"
 $ctrExe = "$kubeBinPath\containerd\ctr.exe"
 $crictlExe = "$kubeBinPath\crictl.exe"
+$setupConfigFilePath = Get-SetupConfigFilePath
 
 class ContainerImage {
     [string]$ImageId
@@ -43,6 +44,10 @@ $headers = @(
 )
 $concatinatedHeadersString = ""
 $headers | ForEach-Object { $concatinatedHeadersString += " -H `"Accept: $_`""  }
+
+function Initialize-ImageModuleForUpgradeBackup ($path) {
+    
+}
 
 function New-KubernetesImageJsonFileIfNotExists() {
     $fileExists = Test-Path -Path $kubernetesImagesJson
@@ -92,8 +97,7 @@ function Get-FilteredImages([ContainerImage[]]$ContainerImages, [ContainerImage[
 }
 
 function Get-ContainerImagesOnLinuxNode([bool]$IncludeK8sImages = $false) {
-    $setupFilePath = Get-SetupConfigFilePath
-    $hostname = Get-ConfigValue -Path $setupFilePath -Key 'ControlPlaneNodeHostname'
+    $hostname = Get-ConfigValue -Path $setupConfigFilePath -Key 'ControlPlaneNodeHostname'
     $KubernetesImages = Get-KubernetesImagesFromJson
     $linuxContainerImages = @()
     $output = (Invoke-CmdOnControlPlaneViaSSHKey 'sudo buildah images').Output
@@ -150,8 +154,7 @@ function Get-ContainerImagesOnWindowsNode([bool]$IncludeK8sImages = $false, [boo
 }
 
 function Get-PushedContainerImages() {
-    $setupFilePath = Get-SetupConfigFilePath
-    $enableAddons = Get-ConfigValue -Path $setupFilePath -Key 'EnabledAddons'
+    $enableAddons = Get-ConfigValue -Path $setupConfigFilePath -Key 'EnabledAddons'
     $isRegistryAddonEnabled = $enableAddons | Select-Object -ExpandProperty Name | Where-Object { $_ -eq "registry" }
     if (!$isRegistryAddonEnabled) {
         return

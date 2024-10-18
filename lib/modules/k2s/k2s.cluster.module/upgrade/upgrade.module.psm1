@@ -120,7 +120,7 @@ function Export-UserApplicationImages {
     )
     Write-Log "Export all of the application images.." -Console
     $linuxContainerImages = Get-ContainerImagesOnLinuxNode
-    $windowsContainerImages = Get-ContainerImagesOnWindowsNode -crictlExePath "$ExePath\crictl.exe"
+    $windowsContainerImages = Get-ContainerImagesOnWindowsNode
 
     $windowsPath = "$BackupDir\windowsImages"
     $linuxPath = "$BackupDir\linuxImages"
@@ -128,69 +128,64 @@ function Export-UserApplicationImages {
     New-Item -Path $windowsPath -ItemType Directory
     New-Item -Path $linuxPath -ItemType Directory
 
-    Write-Log "Starting to export linux images."
+    Write-Log "Start exporting linux images."
 
-    if($linuxContainerImages.Count -ne 0) {
-        foreach ($image in $linuxContainerImages){
-            if ($image.Repository -ne '<none>') {
-                $imageId = $image.ImageId
-                $imageName = $image.Repository
-                $imageTag = $image.Tag
-                $imageFullName = ''
-                if ($imageTag -eq '<none>') {
-                    $imageFullName = $imageName
-                }
-                else {
-                    $imageFullName = "${imageName}:${imageTag}"
-                }
-
-                Write-Log "Exporting image ${imageFullName}."
-
-                $finalExportPath = $linuxPath
-
-                (Invoke-CmdOnControlPlaneViaSSHKey "sudo buildah push ${imageId} oci-archive:/tmp/${imageId}.tar:${imageFullName} 2>&1" -NoLog).Output | Write-Log
-
-                $exportSuccess = $?
-                Copy-FromControlPlaneViaSSHKey "/tmp/${imageId}.tar" $finalExportPath
-
-                if ($exportSuccess -and $?) {
-                    Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
-                }
-
-                (Invoke-CmdOnControlPlaneViaSSHKey "cd /tmp && sudo rm -rf ${imageId}.tar" -NoLog).Output | Write-Log
+    foreach ($image in $linuxContainerImages){
+        if ($image.Repository -ne '<none>') {
+            $imageId = $image.ImageId
+            $imageName = $image.Repository
+            $imageTag = $image.Tag
+            $imageFullName = ''
+            if ($imageTag -eq '<none>') {
+                $imageFullName = $imageName
             }
-        }
+            else {
+                $imageFullName = "${imageName}:${imageTag}"
+            }
 
+            Write-Log "Exporting image ${imageFullName}."
+
+            $finalExportPath = $linuxPath
+
+            (Invoke-CmdOnControlPlaneViaSSHKey "sudo buildah push ${imageId} oci-archive:/tmp/${imageId}.tar:${imageFullName} 2>&1" -NoLog).Output | Write-Log
+
+            $exportSuccess = $?
+            Copy-FromControlPlaneViaSSHKey "/tmp/${imageId}.tar" $finalExportPath
+
+            if ($exportSuccess -and $?) {
+                Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
+            }
+
+            (Invoke-CmdOnControlPlaneViaSSHKey "cd /tmp && sudo rm -rf ${imageId}.tar" -NoLog).Output | Write-Log
+        }
     }
 
-    Write-Log "Starting to export windows images."
+    Write-Log "Start exporting windows images."
 
-    if ($windowsContainerImages.Count -ne 0) {
-        foreach($image in $windowsContainerImages) {
-            if ($image.Repository -ne '<none>') {
-                Write-Log 'Windows image found!'
-                $imageId = $image.ImageId
-                $imageName = $image.Repository
-                $imageTag = $image.Tag
-                $imageFullName = ''
-                if ($imageTag -eq '<none>') {
-                    $imageFullName = $imageName
-                }
-                else {
-                    $imageFullName = "${imageName}:${imageTag}"
-                }
-                Write-Log "Exporting image ${imageFullName}."
+    foreach($image in $windowsContainerImages) {
+        if ($image.Repository -ne '<none>') {
+            Write-Log 'Windows image found!'
+            $imageId = $image.ImageId
+            $imageName = $image.Repository
+            $imageTag = $image.Tag
+            $imageFullName = ''
+            if ($imageTag -eq '<none>') {
+                $imageFullName = $imageName
+            }
+            else {
+                $imageFullName = "${imageName}:${imageTag}"
+            }
+            Write-Log "Exporting image ${imageFullName}."
 
-                $finalExportPath = "$windowsPath\${imageId}.tar"
+            $finalExportPath = "$windowsPath\${imageId}.tar"
 
-                $nerdctlExe = "$ExePath\nerdctl.exe"
+            $nerdctlExe = "$ExePath\nerdctl.exe"
 
-                Write-Log "Exporting image '$imageFullName' only for current platform"
-                &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName
+            Write-Log "Exporting image '$imageFullName' only for current platform"
+            &$nerdctlExe -n 'k8s.io' save -o "$finalExportPath" $imageFullName
 
-                if ($?) {
-                    Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
-                }
+            if ($?) {
+                Write-Log "Image ${imageFullName} exported successfully to ${finalExportPath}."
             }
         }
     }
@@ -549,6 +544,15 @@ function Enable-ClusterIsRunning {
 function Get-ClusterInstalledFolder {
     $installFolder = Get-ConfigInstallFolder
     if ( [string]::IsNullOrEmpty($installFolder) ) {
+        # we asume it is the old default
+        $installFolder = 'C:\k'
+    }
+    return $installFolder
+}
+
+function Get-ClusterSetupConfigFolder {
+    $setupConfigFilePath = Get-SetupConfigFilePath
+    if ( [string]::IsNullOrEmpty($setupConfigFolder) ) {
         # we asume it is the old default
         $installFolder = 'C:\k'
     }

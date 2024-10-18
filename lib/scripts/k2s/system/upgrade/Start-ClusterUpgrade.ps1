@@ -146,14 +146,14 @@ function Start-ClusterUpgrade {
             $currentKubeToolsFolder = "$(Get-ClusterInstalledFolder)\bin\exe"
         }
 
-        $currentBinFolder = "$(Get-ClusterInstalledFolder)\bin"
-
         Export-ClusterResources -SkipResources:$SkipResources -PathResources $BackupDir -ExePath $currentKubeToolsFolder
         
         if ($ShowProgress -eq $true) {
             Write-Progress -Activity 'Backing up the application images' -Id 1 -Status '4/11' -PercentComplete 35 -CurrentOperation 'Backing up the application images, please wait..'
         }
+
         # Backup application images
+        $currentBinFolder = "$(Get-ClusterInstalledFolder)\bin"
         Export-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
 
         # Invoke backup hooks
@@ -204,8 +204,8 @@ function Start-ClusterUpgrade {
         Invoke-ClusterInstall -ShowLogs:$ShowLogs -Config $Config -Proxy $Proxy -DeleteFiles:$DeleteFiles -MasterVMMemory $memoryVM -MasterVMProcessorCount $coresVM -MasterDiskSize $storageVM
         Wait-ForAPIServer
 
-        $currentBinFolder = "$(Get-ClusterInstalledFolder)\bin"
-        Import-UserApplicationImages -BackupDir $BackupDir -ExePath $currentBinFolder
+        $binFolder = Get-KubeBinPath
+        Import-UserApplicationImages -BackupDir $BackupDir -ExePath $binFolder
 
         # restore addons
         if ($ShowProgress -eq $true) {
