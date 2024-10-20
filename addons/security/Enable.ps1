@@ -148,16 +148,23 @@ Import-Certificate @params
 Remove-Item -Path $tempFile.FullName -Force
 
 Write-Log 'Checking for availability of Ingress Controller' -Console
-if (!(Test-NginxIngressControllerAvailability) -and !(Test-TraefikIngressControllerAvailability)) {
+if (Test-NginxIngressControllerAvailability) {
+    $activeIngress = 'nginx'
+}
+elseif (Test-TraefikIngressControllerAvailability) {
+    $activeIngress = 'traefik'
+}
+else {
     #Enable required ingress addon
     Write-Log "No Ingress controller found in the cluster, enabling $Ingress controller" -Console
     Enable-IngressAddon -Ingress:$Ingress
+    $activeIngress = $Ingress
 }
 
 Write-Log 'Installing keycloak' -Console
 $keyCloakYaml = Get-KeyCloakConfig
 (Invoke-Kubectl -Params 'apply', '-f', $keyCloakYaml).Output | Write-Log
-Deploy-IngressForSecurity -Ingress:$Ingress
+Deploy-IngressForSecurity -Ingress:$activeIngress
 Write-Log 'Waiting for keycloak pods to be available' -Console
 $keycloakPodStatus = Wait-ForKeyCloakAvailable
 
@@ -178,16 +185,15 @@ if ($keycloakPodStatus -ne $true -or $oauth2ProxyPodStatus -ne $true) {
     exit 1
 }
 
-# if security addon is enabled, than adapt ingress for other addons
-Write-Log 'Adapting ingress for other addons' -Console
-Update-IngressForAddons -Enable $true
+# if security addon is enabled, than adapt other addons
+Update-Addons
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'security' })
 
 Write-Log 'Installation of security finished.' -Console
 
-Write-UsageForUser
-Write-WarningForUser
+Write-SecurityUsageForUser
+Write-SecurityWarningForUser
 
 if ($EncodeStructuredOutput -eq $true) {
     Send-ToCli -MessageType $MessageType -Message @{Error = $null }

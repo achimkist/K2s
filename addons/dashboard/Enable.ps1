@@ -43,9 +43,9 @@ Param (
 $clusterModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $infraModule = "$PSScriptRoot/../../lib/modules/k2s/k2s.infra.module/k2s.infra.module.psm1"
 $addonsModule = "$PSScriptRoot\..\addons.module.psm1"
-$commonModule = "$PSScriptRoot\common.module.psm1"
+$dashboardModule = "$PSScriptRoot\dashboard.module.psm1"
 
-Import-Module $clusterModule, $infraModule, $addonsModule, $commonModule
+Import-Module $clusterModule, $infraModule, $addonsModule, $dashboardModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -82,9 +82,17 @@ if ((Test-IsAddonEnabled -Addon ([pscustomobject] @{Name = 'dashboard' })) -eq $
     exit 1
 }
 
+if ($Ingress -ne 'none') {
+    Enable-IngressAddon -Ingress:$Ingress
+}
+
+if ($EnableMetricsServer) {
+    Enable-MetricsServer
+}
+
 Write-Log 'Installing Kubernetes dashboard' -Console
 $dashboardConfig = Get-DashboardConfig
-(Invoke-Kubectl -Params 'apply' , '-f', $dashboardConfig).Output | Write-Log
+(Invoke-Kubectl -Params 'apply' , '-k', $dashboardConfig).Output | Write-Log     
 
 Write-Log 'Checking Dashboard status' -Console
 $dashboardStatus = Wait-ForDashboardAvailable
@@ -101,31 +109,11 @@ if ($dashboardStatus -ne $true) {
     exit 1
 }
 
+&"$PSScriptRoot\Update.ps1"
+
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'dashboard' })
 
-switch ($Ingress) {
-    'nginx' {
-        Write-Log 'Deploying ingress nginx addon for external access to dashboard...' -Console
-        Enable-IngressAddon
-        break
-    }
-    'traefik' {
-        Write-Log 'Deploying ingress traefik addon for external access to dashboard...' -Console
-        Enable-TraefikAddon
-        break
-    }
-    'none' {
-        Write-Log 'No ingress deployed...' -Console
-    }
-}
-
-if ($EnableMetricsServer) {
-    Enable-MetricsServer
-}
-
-Enable-ExternalAccessIfIngressControllerIsFound
-
-Write-UsageForUser
+Write-DashboardUsageForUser
 
 Write-Log 'Installation of Kubernetes dashboard finished.' -Console
 

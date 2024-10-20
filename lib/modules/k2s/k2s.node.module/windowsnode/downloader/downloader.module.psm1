@@ -340,7 +340,6 @@ function Install-WinNodeArtifacts {
     )
 
     Invoke-DeployDockerArtifacts $windowsNodeArtifactsDirectory
-    Install-WinDocker -Proxy "$Proxy"
 
     Install-WinContainerd -Proxy "$Proxy" -SkipNetworkingSetup:$SkipClusterSetup -WindowsNodeArtifactsDirectory $windowsNodeArtifactsDirectory -PodSubnetworkNumber $PodSubnetworkNumber
 
@@ -392,24 +391,6 @@ function Invoke-DownloadsCleanup {
     }
 }
 
-function Install-DefaultTools {
-    Param(
-        [parameter(Mandatory = $false, HelpMessage = 'HTTP proxy if available')]
-        [string] $Proxy = ''
-    )
-
-    if (Test-Path($windowsNodeArtifactsDownloadsDirectory)) {
-        Write-Log "Windows Node artifacts downloads directory already exists"
-    }
-    else {
-        Write-Log "Create folder '$windowsNodeArtifactsDownloadsDirectory'"
-        mkdir $windowsNodeArtifactsDownloadsDirectory | Out-Null
-    }
-
-    Invoke-DownloadPuttyArtifacts $windowsNodeArtifactsDownloadsDirectory $Proxy
-    Invoke-DeployPuttytoolsArtifacts $windowsNodeArtifactsDownloadsDirectory
-}
-
 function Get-WindowsNodeArtifactsZipFilePath {
     return $windowsNodeArtifactsZipFilePath
 }
@@ -432,4 +413,10 @@ function Get-WindowsArtifactsDirectory {
     return $windowsNodeArtifactsDirectory
 }
 
-Export-ModuleMember Invoke-DeployWinArtifacts, Invoke-DownloadsCleanup, Install-WinNodeArtifacts, Install-DefaultTools, Get-WindowsNodeArtifactsZipFilePath, Install-PuttyTools, Install-KubectlTool, Get-WindowsArtifactsDirectory
+Export-ModuleMember Invoke-DeployWinArtifacts,
+Invoke-DownloadsCleanup,
+Install-WinNodeArtifacts,
+Get-WindowsNodeArtifactsZipFilePath,
+Install-PuttyTools,
+Install-KubectlTool,
+Get-WindowsArtifactsDirectory

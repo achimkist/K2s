@@ -84,7 +84,7 @@ Write-Log 'Installing fluent-bit and opensearch stack' -Console
 # opensearch dashboards
 # fluent-bit linux
 
-$manifestsPath = "$PSScriptRoot\manifests"
+$manifestsPath = "$PSScriptRoot\manifests\logging"
 
 (Invoke-Kubectl -Params 'apply', '-f', "$manifestsPath\namespace.yaml").Output | Write-Log
 (Invoke-Kubectl -Params 'create', '-k', "$manifestsPath\").Output | Write-Log
@@ -141,8 +141,10 @@ if (!$kubectlCmd.Success) {
 $dashboardIP = (Invoke-Kubectl -Params 'get', 'pods', '-l=app.kubernetes.io/name=opensearch-dashboards', '-n', 'logging', '-o=jsonpath="{.items[0].status.podIP}"').Output
 $dashboardIP = $dashboardIP -replace '"', ''
 
-$importingSavedObjects = curl.exe -X POST --retry 10 --retry-delay 5 --silent --disable --fail --retry-all-errors "http://${dashboardIP}:5601/api/saved_objects/_import?overwrite=true" -H 'osd-xsrf: true' -F "file=@$PSScriptRoot/opensearch-dashboard-saved-objects/k2s-index-pattern.ndjson" 2>$null
+$importingSavedObjects = curl.exe -X POST --retry 10 --retry-delay 5 --silent --disable --fail --retry-all-errors "http://${dashboardIP}:5601/logging/api/saved_objects/_import?overwrite=true" -H 'osd-xsrf: true' -F "file=@$PSScriptRoot/opensearch-dashboard-saved-objects/k2s-index-pattern.ndjson" 2>$null
 Write-Log $importingSavedObjects
+
+&"$PSScriptRoot\Update.ps1"
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'logging' })
 Write-Log 'Logging Stack installed successfully'

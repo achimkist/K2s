@@ -70,7 +70,7 @@ if ($Ingress -ne 'none') {
     Enable-IngressAddon -Ingress:$Ingress
 }
 
-$manifestsPath = "$PSScriptRoot\manifests"
+$manifestsPath = "$PSScriptRoot\manifests\monitoring"
 
 Write-Log 'Installing Kube Prometheus Stack' -Console
 (Invoke-Kubectl -Params 'apply', '-f', "$manifestsPath\namespace.yaml").Output | Write-Log
@@ -117,6 +117,8 @@ if (!$kubectlCmd.Success) {
     Write-Log $errMsg -Error
     exit 1
 }
+
+&"$PSScriptRoot\Update.ps1"
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'monitoring' })
 

@@ -58,7 +58,10 @@ if ($null -eq (Invoke-Kubectl -Params 'get', 'namespace', 'logging', '--ignore-n
 
 Write-Log 'Uninstalling Logging Stack' -Console
 
-$manifestsPath = "$PSScriptRoot\manifests"
+$manifestsPath = "$PSScriptRoot\manifests\logging"
+
+Remove-IngressForTraefik -Addon ([pscustomobject] @{Name = 'logging' })
+Remove-IngressForNginx -Addon ([pscustomobject] @{Name = 'logging' })
 
 (Invoke-Kubectl -Params 'delete', '-k', $manifestsPath, '--ignore-not-found', '--wait=false').Output | Write-Log
 (Invoke-Kubectl -Params 'delete', '-k', "$manifestsPath\fluentbit\windows", '--ignore-not-found', '--wait=false').Output | Write-Log

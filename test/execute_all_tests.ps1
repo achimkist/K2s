@@ -82,9 +82,13 @@ if ($ExcludePowershellTests -and $ExcludeGoTests) {
 
 Import-Module "$PSScriptRoot\test.module.psm1" -Force
 
-$pesterVersion = '5.5.0'
-$ginkgoVersion = '2.16.0'
+$pesterVersion = '5.6.1'
+$ginkgoVersion = '2.20.2'
 $rootDir = "$PSScriptRoot\..\"
+
+# switch to drive
+$drive = Split-Path -Path $rootDir -Qualifier
+&$drive
 
 Write-Output 'All tests execution started.'
 
@@ -104,7 +108,8 @@ if ($OfflineMode) {
     # Set proxy which will be used by tests
     Write-Output 'Set to System Test Offline mode'
     $env:SYSTEM_OFFLINE_MODE = $true
-} else {
+}
+else {
     $env:SYSTEM_OFFLINE_MODE = $false
 }
 

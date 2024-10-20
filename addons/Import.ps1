@@ -42,10 +42,29 @@ if ($systemError) {
 
 Write-Log "Extracting $ZipFile" -Console
 Write-Log '---' -Console
-$dir = Split-Path $ZipFile
-$extractionFolder = "${dir}\tmp-extracted-addons\addons"
+$tmpDir = "$env:TEMP\$(Get-Date -Format ddMMyyyy-HHmmss)-tmp-extracted-addons"
+$extractionFolder = "$tmpDir\addons"
 Remove-Item -Force "${extractionFolder}" -Recurse -Confirm:$False -ErrorAction SilentlyContinue
-Expand-Archive $ZipFile -DestinationPath "$dir\tmp-extracted-addons" -Force
+# check if drive has enough space to extract the zip file
+$zipSize = (Get-Item $ZipFile).length
+$drive = (Get-Item $env:TEMP).PSDrive.Name
+$freeSpace = (Get-PSDrive -Name $drive).Free
+$freeSpaceGB = [math]::Round($freeSpace / 1GB, 2)
+$zipSizeGB = [math]::Round($zipSize / 1GB, 2)
+$additionalSpace = 2 * 1024 * 1024 * 1024 # 2 GB
+Write-Log "Free space $freeSpaceGB GB, size of addons zip file: $zipSizeGB GB" -Console
+if ($zipSize -gt ($freeSpace + $additionalSpace)) {
+    $errMsg = "Not enough space on drive $drive to extract the zip file. Required space: $zipSize bytes, Free space: $freeSpace bytes."
+    if ($EncodeStructuredOutput -eq $true) {
+        $err = New-Error -Code 'image-space-insufficient' -Message $errMsg
+        Send-ToCli -MessageType $MessageType -Message @{Error = $err }
+        return
+    }
+
+    Write-Log $errMsg -Error
+    exit 1
+}
+Expand-Archive $ZipFile -DestinationPath "$tmpDir" -Force
 
 $exportedAddons = (Get-Content "$extractionFolder\addons.json" | Out-String | ConvertFrom-Json).addons
 if ($null -eq $exportedAddons -or $exportedAddons.Count -lt 1) {
@@ -143,7 +162,7 @@ foreach ($addon in $addonsToImport) {
     Write-Log '---' -Console
 }
 
-Remove-Item -Force "${dir}\tmp-extracted-addons" -Recurse -Confirm:$False -ErrorAction SilentlyContinue
+Remove-Item -Force "$tmpDir" -Recurse -Confirm:$False -ErrorAction SilentlyContinue
 
 Write-Log '---'
 Write-Log "Addons '$($addonsToImport.name)' imported successfully!" -Console

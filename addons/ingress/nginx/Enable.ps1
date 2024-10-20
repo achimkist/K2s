@@ -29,9 +29,9 @@ Param(
 $infraModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.infra.module/k2s.infra.module.psm1"
 $clusterModule = "$PSScriptRoot/../../../lib/modules/k2s/k2s.cluster.module/k2s.cluster.module.psm1"
 $addonsModule = "$PSScriptRoot\..\..\addons.module.psm1"
-$commonModule = "$PSScriptRoot\common.module.psm1"
+$nginxModule = "$PSScriptRoot\nginx.module.psm1"
 
-Import-Module $infraModule, $clusterModule, $addonsModule, $commonModule
+Import-Module $infraModule, $clusterModule, $addonsModule, $nginxModule
 
 Initialize-Logging -ShowLogs:$ShowLogs
 
@@ -83,7 +83,7 @@ if ((Test-IsAddonEnabled -Addon ([pscustomobject] @{Name = 'ingress'; Implementa
     exit 1
 }
 
-if ((Test-IsAddonEnabled -Addon ([pscustomobject] @{Name = 'gateway-api'})) -eq $true) {
+if ((Test-IsAddonEnabled -Addon ([pscustomobject] @{Name = 'gateway-api' })) -eq $true) {
     $errMsg = "Addon 'gateway-api' is enabled. Disable it first to avoid port conflicts."
 
     if ($EncodeStructuredOutput -eq $true) {
@@ -155,6 +155,9 @@ $clusterIngressConfig = "$PSScriptRoot\manifests\cluster-local-ingress.yaml"
 Write-Log 'All ingress nginx pods are up and ready.'
 
 Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = 'ingress'; Implementation = 'nginx' })
+
+# adapt other addons
+Update-Addons
 
 Write-Log 'ingress nginx installed successfully' -Console
 

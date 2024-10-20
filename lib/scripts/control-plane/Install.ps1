@@ -82,7 +82,8 @@ Install-WinHttpProxy -Proxy $Proxy
 $controlPlaneIpAddress = Get-ConfiguredIPControlPlane
 $windowsHostIpAddress = Get-ConfiguredKubeSwitchIP
 $transparentProxy = "http://$($windowsHostIpAddress):8181"
-Set-ProxySettingsOnKubenode -ProxySettings $transparentProxy -IpAddress $controlPlaneIpAddress
+$controlPlaneUserName = Get-DefaultUserNameControlPlane
+Set-ProxySettingsOnKubenode -ProxySettings $transparentProxy -UserName $controlPlaneUserName -IpAddress $controlPlaneIpAddress
 
 $windowsArtifactsDirectory = Get-WindowsArtifactsDirectory
 Invoke-DeployDnsProxyArtifacts $windowsArtifactsDirectory
@@ -111,9 +112,7 @@ if (! $SkipStart) {
             }
         }
     }
-} else {
-    & "$PSScriptRoot\Stop.ps1" -AdditionalHooksDir:$AdditionalHooksDir -ShowLogs:$ShowLogs -SkipHeaderDisplay
-}
+} 
 
 Write-Log '---------------------------------------------------------------'
 Write-Log "K2s control plane node setup finished.   Total duration: $('{0:hh\:mm\:ss}' -f $installStopwatch.Elapsed )"

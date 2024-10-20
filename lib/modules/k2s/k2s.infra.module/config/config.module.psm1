@@ -159,6 +159,10 @@ function Get-DefaultTempPwd {
     return 'admin'
 }
 
+function Get-ConfiguredClusterNetworkPrefix {
+    return $ipControlPlaneCIDR.Substring($ipControlPlaneCIDR.IndexOf('/')+1)
+}
+
 <#
 .SYNOPSIS
     Creates a specified directory if not existing.
@@ -341,7 +345,11 @@ function Set-ConfigSetupType {
 }
 
 function Get-ConfigWslFlag {
-    return Get-ConfigValue -Path $SetupJsonFile -Key 'WSL'
+    $wslValue = Get-ConfigValue -Path $SetupJsonFile -Key 'WSL'
+    if ($null -eq $wslValue){
+        return $false
+    }
+    return $wslValue
 }
 
 function Get-ReuseExistingLinuxComputerForMasterNodeFlag {
@@ -354,6 +362,20 @@ function Set-ConfigWslFlag {
     )
     Set-ConfigValue -Path $SetupJsonFile -Key 'WSL' -Value $Value
 }
+
+
+# Windows container image build is enabled or disabled. If enabled docker is installed.
+function Get-ConfigWinBuildEnabledFlag {
+    return Get-ConfigValue -Path $SetupJsonFile -Key 'WinBuildEnabled'
+}
+
+function Set-ConfigWinBuildEnabledFlag {
+    param (
+        [object] $Value = $(throw 'Please provide the config value.')
+    )
+    Set-ConfigValue -Path $SetupJsonFile -Key 'WinBuildEnabled' -Value $Value
+}
+
 
 function Get-ConfigLinuxOsType {
     return Get-ConfigValue -Path $SetupJsonFile -Key 'LinuxOs'
@@ -539,4 +561,7 @@ Get-LinuxLocalSharePath,
 Get-WindowsLocalSharePath,
 Get-ReuseExistingLinuxComputerForMasterNodeFlag,
 Get-ControlPlaneNodeWslSwitchName,
-Get-WindowsVmIpAddress
+Get-WindowsVmIpAddress,
+Get-ConfigWinBuildEnabledFlag,
+Set-ConfigWinBuildEnabledFlag,
+Get-ConfiguredClusterNetworkPrefix

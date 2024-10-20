@@ -79,14 +79,13 @@ $oauth2ProxyYaml = Get-OAuth2ProxyConfig
 $keyCloakYaml = Get-KeyCloakConfig
 (Invoke-Kubectl -Params 'delete', '-f', $keyCloakYaml).Output | Write-Log
 
-# if security addon is enabled, than adapt ingress for other addons
-Write-Log 'Adapting ingress for other addons' -Console
-Update-IngressForAddons -Enable $false
+# if security addon is enabled, than adapt other addons
+Update-Addons
 
 Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = 'security' })
 Write-Log 'Uninstallation of security finished' -Console
 
-Write-WarningForUser
+Write-SecurityWarningForUser
 
 if ($EncodeStructuredOutput -eq $true) {
     Send-ToCli -MessageType $MessageType -Message @{Error = $null }

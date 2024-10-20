@@ -55,9 +55,11 @@ if ($null -eq (Invoke-Kubectl -Params 'get', 'namespace', 'monitoring', '--ignor
     exit 1
 }
 
-$manifestsPath = "$PSScriptRoot\manifests"
+$manifestsPath = "$PSScriptRoot\manifests\monitoring"
 
 Write-Log 'Uninstalling Kube Prometheus Stack' -Console
+Remove-IngressForTraefik -Addon ([pscustomobject] @{Name = 'monitoring' })
+Remove-IngressForNginx -Addon ([pscustomobject] @{Name = 'monitoring' })
 (Invoke-Kubectl -Params 'delete', '-k', $manifestsPath).Output | Write-Log
 (Invoke-Kubectl -Params 'delete', '-f', "$manifestsPath\crds").Output | Write-Log
 (Invoke-Kubectl -Params 'delete', '-f', "$manifestsPath\namespace.yaml").Output | Write-Log

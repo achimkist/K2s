@@ -21,10 +21,6 @@
                 "description": {
                     "description": "The description of an addon for user display",
                     "type": "string"
-                },
-                "implementation": {
-                    "description": "The implementation type of the addon",
-                    "type": "string"
                 }
             },
             "required": [
