@@ -531,14 +531,14 @@ function Wait-ForSshPossible {
             }
         }
 
-        if ($iteration -eq 25) {
+        if ($iteration -eq 75) {
             Write-Log "SSH login into VM with $($User) still not available, ssh result is '$($result)' aborting..." -Console
             throw "Unable to SSH login into VM"
         }
         if ($iteration -ge 3 ) {
             Write-Log "SSH login into VM with $($User) not yet possible, current result is '$($result)' waiting for it..."
         }
-        Start-Sleep 60
+        Start-Sleep 4
     }
     if ($iteration -eq 1) {
         Write-Log "SSH login into VM with $($User) possible, no waiting needed."
