@@ -174,6 +174,10 @@ function Get-DefaultTempPwd {
     return 'admin'
 }
 
+function Get-ConfiguredClusterNetworkPrefix {
+    return $ipControlPlaneCIDR.Substring($ipControlPlaneCIDR.IndexOf('/')+1)
+}
+
 <#
 .SYNOPSIS
     Creates a specified directory if not existing.
@@ -574,4 +578,5 @@ Get-ReuseExistingLinuxComputerForMasterNodeFlag,
 Get-ControlPlaneNodeWslSwitchName,
 Get-WindowsVmIpAddress,
 Get-ConfigWinBuildEnabledFlag,
-Set-ConfigWinBuildEnabledFlag
+Set-ConfigWinBuildEnabledFlag,
+Get-ConfiguredClusterNetworkPrefix
