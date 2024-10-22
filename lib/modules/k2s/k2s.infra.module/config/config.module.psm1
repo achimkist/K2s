@@ -80,7 +80,22 @@ function Get-ConfiguredKubeConfigDir {
 }
 
 function Get-KubernetesImagesFilePath {
-    return $kubernetesImagesJsonFile
+
+    # Since the location of the kubernetes_images.json changed for 1.2.0 we need to handle the old version for the upgrade operation 
+    $currentVersion = Get-ConfigProductVersion
+
+    if($null -eq $currentVersion) {
+        $currentVersion = Get-ProductVersion
+    }
+    $currentVersion = [System.Version]::Parse($currentVersion)
+
+    $threshholdVersion = [System.Version]::Parse("1.2.0")
+
+    if ([Version]$currentVersion -ge $threshholdVersion) {
+        return $kubernetesImagesJsonFile
+    } else {
+        return $kubernetesImagesJsonFile = "$kubeConfigDir\kubernetes_images.json"
+    }
 }
 
 function Get-k2sConfigFilePath {
