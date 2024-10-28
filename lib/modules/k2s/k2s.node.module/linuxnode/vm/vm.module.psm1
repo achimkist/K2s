@@ -495,6 +495,11 @@ function Wait-ForSshPossible {
     )
     $iteration = 0
     Write-Log "Performing SSH login into VM with $($User)..."
+    Write-Log "temporary sleep"
+
+    Start-Sleep 420
+
+    Write-Log "End sleep"
     while ($true) {
         $iteration++
         $result = ''
@@ -509,12 +514,12 @@ function Wait-ForSshPossible {
         }
         else {
 
-            $command = "Write-Output y | &`"$plinkExe`" -ssh -4 $User -pw $UserPwd -no-antispoof -v `"$($SshTestCommand)`" 2>&1"
+            $command = "Write-Output y | &`"$plinkExe`" -ssh -4 $User -pw $UserPwd -no-antispoof `"$($SshTestCommand)`" 2>&1"
 
             Write-Log "command executed"
             Write-Log "$command"
 
-            $result = $(Write-Output y | &"$plinkExe" -ssh -4 $User -pw $UserPwd -no-antispoof -v "$($SshTestCommand)" 2>&1)
+            $result = $(Write-Output y | &"$plinkExe" -ssh -4 $User -pw $UserPwd -no-antispoof "$($SshTestCommand)" 2>&1)
 
             Write-Log "command output"
             Write-Log $result
