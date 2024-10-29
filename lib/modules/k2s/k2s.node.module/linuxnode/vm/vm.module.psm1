@@ -547,9 +547,21 @@ function Wait-ForSshPossible {
     }
     if ($iteration -eq 1) {
         Write-Log "SSH login into VM with $($User) possible, no waiting needed."
+
+        Write-Log "temporary sleep 2"
+
+        Start-Sleep 420
+    
+        Write-Log "End sleep 2"
     }
     else {
         Write-Log "SSH login into VM with $($User) now possible."
+
+        Write-Log "temporary sleep 3"
+
+        Start-Sleep 420
+    
+        Write-Log "End sleep 3"
     }
 }
 
