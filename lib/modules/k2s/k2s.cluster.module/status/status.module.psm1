@@ -118,19 +118,6 @@ function Get-KubernetesServiceAreRunning {
     return $true
 }
 
-<#
-.SYNOPSIS
-DEPRECATED: Replace with Test-SystemAvailability eventually when script structure migration is done
-
-.DESCRIPTION
-DEPRECATED: Replace with Test-SystemAvailability eventually when script structure migration is done
-#>
-function Test-ClusterAvailability {
-    if (!(Get-IsControlPlaneRunning) -and !(Get-KubernetesServiceAreRunning) ) {
-        throw "System is not running. Please start the systeb with 'k2s start'."
-    }
-}
-
 function Test-SystemAvailability {
     param(
         [Parameter(Mandatory = $false)]
@@ -169,4 +156,4 @@ function Get-IsWorkerVM {
     }
 }
 
-Export-ModuleMember -Function Get-Status, Get-KubernetesServiceAreRunning, Test-ClusterAvailability, Test-SystemAvailability, Get-IsWorkerVM
+Export-ModuleMember -Function Get-Status, Get-KubernetesServiceAreRunning, Test-SystemAvailability, Get-IsWorkerVM

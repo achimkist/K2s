@@ -209,12 +209,6 @@ Describe 'Test-SystemAvailability' -Tag 'unit', 'ci' {
     }
 }
 
-Describe 'Test-ClusterAvailability' -Tag 'unit', 'ci' -Skip { 
-    It 'test-not-implemented' {
-        
-    }
-}
-
 Describe 'Get-KubernetesServiceAreRunning' -Tag 'unit', 'ci' -Skip { 
     It 'test-not-implemented' {
         
