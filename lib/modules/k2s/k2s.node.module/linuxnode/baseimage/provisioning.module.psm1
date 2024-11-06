@@ -544,6 +544,12 @@ function New-ProvisionedBaseImage {
     Write-Log "Start the VM $vmName"
     Start-VirtualMachineAndWaitForHeartbeat -Name $vmName
     
+    Write-Log "Stop the VM again"
+    Stop-VirtualMachineForBaseImageProvisioning -Name $vmName
+
+    Write-Log "Re-Start the VM $vmName"
+    Start-VirtualMachineAndWaitForHeartbeat -Name $vmName
+
     $user = "$userName@$vmIP"
     # let's check if the connection to the remote computer is possible
     Write-Log "Checking if an SSH login into remote computer '$vmIP' with user '$user' is possible"
