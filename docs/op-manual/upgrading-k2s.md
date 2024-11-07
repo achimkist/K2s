@@ -24,23 +24,23 @@ Upgrade is overall available starting from *K2s* `v1.1.0.`.
 2. Open a command shell with administrator privileges inside that folder
 3. Run:
     ```console
-    k2s upgrade
+    k2s system upgrade
     ```
 
 All downloaded artifacts are cached on local disk by default (in case you want to re-install *K2s*). They can be deleted with the following option:
 ```console
-k2s upgrade -d
+k2s system upgrade -d
 ```
 
 In general the new cluster based on the new version will take over all settings available in the older cluster (like memory, CPU and storage settings).
 If you want to overwrite those settings, pass in a config file similar to [Installing Using Config Files](installing-k2s.md#installing-using-config-files):
 ```console
-k2s upgrade -c <my-config>.yaml
+k2s system upgrade -c <my-config>.yaml
 ```
 
 To specify an http proxy, run:
 ```console
-k2s upgrade -p <proxy-to-use>
+k2s system upgrade -p <proxy-to-use>
 ```
 
 The following tasks will be executed:
