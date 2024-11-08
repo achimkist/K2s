@@ -147,6 +147,8 @@ $kubeToolsPath = Get-KubeToolsPath
 
 Invoke-Hook -HookName 'AfterBaseInstall' -AdditionalHooksDir $AdditionalHooksDir
 
+Write-Log "Collecting kubernetes images and storing them to $(Get-KubernetesImagesFilePath)."
+Write-KubernetesImagesIntoJson -WorkerVM $true
 
 
 Write-Log '---------------------------------------------------------------'

@@ -372,8 +372,8 @@ function Initialize-KubernetesCluster {
     Start-Sleep 2
     &"$kubeToolsPath\kubectl.exe" get nodes -o wide
 
-    Write-Log "Collecting kubernetes images and storing them to $kubernetesImagesJson."
-    Write-KubernetesImagesIntoJson
+    # Write-Log "Collecting kubernetes images and storing them to $kubernetesImagesJson."
+    # Write-KubernetesImagesIntoJson
 }
 
 function Uninstall-Cluster {
@@ -440,8 +440,8 @@ function Initialize-VMKubernetesCluster {
 
     Disable-PasswordAuthenticationToWinNode
 
-    Write-Log "Collecting kubernetes images and storing them to $(Get-KubernetesImagesFilePath)."
-    Write-KubernetesImagesIntoJson -WorkerVM $true
+    # Write-Log "Collecting kubernetes images and storing them to $(Get-KubernetesImagesFilePath)."
+    # Write-KubernetesImagesIntoJson -WorkerVM $true
 }
 
 function Install-KubectlOnHost($KubernetesVersion, $Proxy) {
@@ -560,7 +560,55 @@ function Write-K8sNodesStatus {
         }
         else {
             Write-Log "Iteration: $retryIteration Node status not available yet, retrying in a moment..."
-            Start-Sleep -Seconds 5
+   <#
+   .SYNOPSIS
+   #Short description
+   
+   .DESCRIPTION
+   Long description
+   
+   .PARAMETER Image
+   Parameter description
+   
+   .PARAMETER Hostname
+   Parameter description
+   
+   .PARAMETER VmName
+   Parameter description
+   
+   .PARAMETER VMStartUpMemory
+   Parameter description
+   
+   .PARAMETER VMDiskSize
+   Parameter description
+   
+   .PARAMETER VMProcessorCount
+   Parameter description
+   
+   .PARAMETER IpAddress
+   Parameter description
+   
+   .PARAMETER DnsAddresses
+   Parameter description
+   
+   .PARAMETER Proxy
+   Parameter description
+   
+   .PARAMETER AdditionalHooksDir
+   Parameter description
+   
+   .PARAMETER DeleteFilesForOfflineInstallation
+   Parameter description
+   
+   .PARAMETER ForceOnlineInstallation
+   Parameter description
+   
+   .EXAMPLE
+   An example
+   
+   .NOTES
+   General notes
+   #>       Start-Sleep -Seconds 5
         }
 
         if ($retryIteration -eq 10) {

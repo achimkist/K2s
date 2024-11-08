@@ -113,6 +113,9 @@ $kubeToolsPath = Get-KubeToolsPath
 
 Invoke-Hook -HookName 'AfterBaseInstall' -AdditionalHooksDir $AdditionalHooksDir
 
+Write-Log "Collecting kubernetes images and storing them to $(Get-KubernetesImagesFilePath)."
+Write-KubernetesImagesIntoJson -WorkerVM $true
+
 Write-Log '---------------------------------------------------------------'
 Write-Log "K2s setup finished.   Total duration: $('{0:hh\:mm\:ss}' -f $installStopwatch.Elapsed )"
 Write-Log '---------------------------------------------------------------'
