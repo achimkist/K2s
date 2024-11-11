@@ -119,8 +119,10 @@ function Export-UserApplicationImages {
         [string] $ExePath
     )
     Write-Log "Export all of the application images.." -Console
+
+    $crictlExePath = "$ExePath\crictl.exe"
     $linuxContainerImages = Get-ContainerImagesOnLinuxNode
-    $windowsContainerImages = Get-ContainerImagesOnWindowsNode
+    $windowsContainerImages = Get-ContainerImagesOnWindowsNode -crictlExePath $crictlExePath
 
     $windowsPath = "$BackupDir\windowsImages"
     $linuxPath = "$BackupDir\linuxImages"
