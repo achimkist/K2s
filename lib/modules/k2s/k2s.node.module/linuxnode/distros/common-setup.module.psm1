@@ -1,5 +1,5 @@
 
-# SPDX-FileCopyrightText: © 2023 Siemens Healthcare GmbH
+# SPDX-FileCopyrightText: © 2024 Siemens Healthineers AG
 #
 # SPDX-License-Identifier: MIT
 
@@ -651,6 +651,9 @@ Function Set-UpMasterNode {
     Write-Log 'Install custom DNS server'
     &$executeRemoteCommand 'sudo DEBIAN_FRONTEND=noninteractive apt-get install dnsutils --yes' 
     &$executeRemoteCommand 'sudo DEBIAN_FRONTEND=noninteractive apt-get install dnsmasq --yes' 
+
+    Write-Log 'Scale down coredns to 1 replicas'
+    &$executeRemoteCommand 'kubectl scale deployment coredns -n kube-system --replicas=1'
 
     Write-Log 'Configure custom DNS server'
     # add more interfaces to listen on
