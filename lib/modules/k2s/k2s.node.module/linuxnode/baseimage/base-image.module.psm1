@@ -49,7 +49,7 @@ function Invoke-DownloadDebianImage {
     $urlRoot = 'https://cloud.debian.org/images/cloud/bookworm/latest/'
 
     #$urlFile = 'debian-11-genericcloud-amd64.qcow2'
-    $urlFile = 'debian-12-generic-amd64.qcow2'
+    $urlFile = 'debian-12-genericcloud-amd64.qcow2'
 
     $url = "$urlRoot/$urlFile"
 
@@ -321,6 +321,7 @@ function New-VirtualMachineForBaseImageProvisioning {
 	    Set-VMMemory -VMName $VmName -DynamicMemoryEnabled $false -StartupBytes $VMMemoryStartupBytes -ErrorAction Stop
 	    Write-Log "  - set its cpu count to $VMProcessorCount"
 	    Set-VMProcessor -VMName $VmName -Count $VMProcessorCount -ErrorAction Stop
+        Set-VMComPort -VMName $VmName -Number 2 -Path "\\.\pipe\dbg1"
 	    if ($useIsoFilePath) {
 	    	Write-Log "  - set its DVD drive with $IsoFilePath"
 	    	Set-VMDvdDrive -VMName $VmName -Path $IsoFilePath -ErrorAction Stop
