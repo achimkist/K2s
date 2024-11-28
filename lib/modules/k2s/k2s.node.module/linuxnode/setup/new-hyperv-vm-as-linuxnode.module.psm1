@@ -153,8 +153,7 @@ function New-LinuxVmAsWorkerNode {
 
 function New-VmFromIso {
     param(
-        [Parameter(Mandato
-        ry = $true)]
+        [Parameter(Mandatory = $true)]
         [string]$VMName,
         [Parameter(Mandatory = $true)]
         [string]$VhdxPath,
