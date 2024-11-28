@@ -49,7 +49,7 @@ function Invoke-DownloadDebianImage {
     $urlRoot = 'https://cloud.debian.org/images/cloud/bookworm/latest/'
 
     #$urlFile = 'debian-11-genericcloud-amd64.qcow2'
-    $urlFile = 'debian-12-genericcloud-amd64.qcow2'
+    $urlFile = 'debian-12-generic-amd64.qcow2'
 
     $url = "$urlRoot/$urlFile"
 
@@ -111,6 +111,10 @@ Function New-VhdxDebianCloud {
     $debianImage = Get-DebianImage -Proxy $Proxy -DownloadsDirectory $DownloadsDirectory | Assert-Path -PathType "Leaf" -ShallExist $true
     $qemuTool = Get-QemuTool -Proxy $Proxy -DownloadsDirectory $DownloadsDirectory | Assert-Path -PathType "Leaf" -ShallExist $true
     $vhdxFile = New-VhdxFile -SourcePath $debianImage -VhdxPath $TargetFilePath -QemuExePath $qemuTool | Assert-Path -PathType "Leaf" -ShallExist $true
+
+    # Write-Log "temporary sleep"
+    # Start-Sleep -Seconds  180000
+    # Write-Log "end temporary sleep"
 }
 
 
@@ -163,7 +167,12 @@ Function New-VhdxFile {
     Assert-Path -Path $QemuExePath -PathType "Leaf" -ShallExist $true | Out-Null
 
     Invoke-Tool -ToolPath $QemuExePath -Arguments "convert -f qcow2 `"$SourcePath`" -O vhdx -o subformat=dynamic `"$VhdxPath`""
+    # Write-Log "QemuExePath"
+    # Write-Log $QemuExePath
     Assert-Path -Path $VhdxPath -PathType "Leaf" -ShallExist $true | Out-Null
+
+    # Write-Log "VhdxPath"
+    # Write-Log $VhdxPath
 
     $VhdxPath
 }

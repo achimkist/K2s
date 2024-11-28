@@ -536,7 +536,7 @@ function Wait-ForSshPossible {
             }
         }
 
-        if ($iteration -eq 75) {
+        if ($iteration -eq 25) {
             Write-Log "SSH login into VM with $($User) still not available, ssh result is '$($result)' aborting..." -Console
             throw "Unable to SSH login into VM"
         }
