@@ -199,6 +199,8 @@ function New-VmFromIso {
         $vm | Set-VMFirmware -SecureBootTemplateId ([guid]'272e7447-90a4-4563-a4b9-8e4ab00526ce')
     }
 
+    $vm | Set-VMComPort -Number 2 -Path "\\.\pipe\dbg1"
+
     # Enable nested virtualization (if processor supports it)
     $virt = Get-CimInstance Win32_Processor | Where-Object { ($_.Name -like 'Intel*') }
     if ( $virt ) {
