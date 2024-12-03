@@ -13,7 +13,7 @@ users:
     no_user_group: true
     primary_group: users
     sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: users, admin, docker, sudo, debian, adm, netdev    
+    groups: users, admin, docker, sudo, adm, netdev    
     lock_passwd: false 
     plain_text_passwd: __VM_USER_PWD__
     ssh_authorized_keys:
