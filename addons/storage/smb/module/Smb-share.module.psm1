@@ -9,18 +9,43 @@ $addonsModule = "$PSScriptRoot/../../../addons.module.psm1"
 $passwordModule = "$PSScriptRoot/password.module.psm1"
 
 Import-Module $clusterModule, $infraModule, $nodeModule, $addonsModule, $passwordModule
+function Expand-PathSMb {
+    <#
+    .SYNOPSIS
+        Calls Resolve-Path but works for files that don't exist.
+    #>
+    param (
+        [string] $FileName
+    )
+
+    $FileName = Resolve-Path $FileName -ErrorAction SilentlyContinue -ErrorVariable _frperror
+    if (-not($FileName)) {
+        $FileName = $_frperror[0].TargetObject
+    }
+
+    return $FileName
+}
 
 $AddonName = 'storage'
 $ImplementationName = 'smb'
 $localHooksDir = "$PSScriptRoot\..\hooks"
 $logFile = "$(Get-SystemDriveLetter):\var\log\ssh_smbSetup.log"
-$linuxLocalPath = Get-LinuxLocalSharePath
-$windowsLocalPath = Get-WindowsLocalSharePath
-$linuxShareName = 'k8sshare' # exposed by Linux VM
-$windowsShareName = (Split-Path -Path $windowsLocalPath -NoQualifier).TrimStart('\') # visible from VMs
-$windowsSharePath = Split-Path -Path $windowsLocalPath -Qualifier
-$linuxHostRemotePath = "\\$(Get-ConfiguredIPControlPlane)\$linuxShareName"
-$windowsHostRemotePath = "\\$(Get-ConfiguredKubeSwitchIP)\$windowsShareName"
+<#$linuxLocalPath1 = Get-LinuxLocalSharePath
+<#$windowsLocalPath = Get-WindowsLocalSharePath#>
+$global:configFile= "$PSScriptRoot\..\Config\SmbStorage.json"
+$global:rootConfig = Get-Content $configFile | Out-String | ConvertFrom-Json
+
+$global:linuxLocalPath
+$global:windowsLocalPath
+<#$windowsLocalPath = Resolve-Path $localwindowPath -ErrorAction SilentlyContinue -ErrorVariable _frperror#>
+
+
+$global:linuxShareName
+$global:windowsShareName
+$global:windowsSharePath
+$global:linuxHostRemotePath
+$global:windowsHostRemotePath
+
 $smbUserName = 'remotesmb'
 $smbFullUserNameWin = "$env:computername\$smbUserName"
 $smbFullUserNameLinux = "$(Get-ConfigControlPlaneNodeHostname)\$smbUserName"
@@ -134,7 +159,11 @@ function New-SmbHostOnWindowsIfNotExisting {
 
     Write-Log "Setting up '$windowsShareName' SMB host on Windows.."
 
+    if (Get-LocalUser -Name $smbUserName -ErrorAction SilentlyContinue) {
+        Write-Host "User '$smbUserName' already exists."
+    } else{
     New-LocalUser -Name $smbUserName -Password $smbPw -Description 'A K2s user account for SMB access' -ErrorAction Stop | Out-Null # Description max. length seems to be 48 chars ?!
+    }
     New-Item -Path "$windowsSharePath\" -Name $windowsShareName -ItemType 'directory' -ErrorAction SilentlyContinue | Out-Null
     New-SmbShare -Name $windowsShareName -Path $windowsLocalPath -FullAccess $smbFullUserNameWin -ErrorAction Stop | Out-Null
     Add-FirewallExceptions
@@ -714,7 +743,6 @@ function Restore-StorageClass {
         $manifestDir = $manifestBaseDir
     }
 
-    New-SmbShareNamespace
 
     Add-Secret -Name $smbCredsName -Namespace $namespace -Literals "username=$smbUserName", "password=$($creds.GetNetworkCredential().Password)" | Write-Log
 
@@ -775,12 +803,23 @@ function Remove-SmbShareAndFolderWindowsHost {
         [switch]$SkipNodesCleanup = $false
     )
     Write-Log 'Removing SMB shares and folders hosted on Windows..'
-
+    foreach($pathValue in $pathValues.PSObject.Properties){
+        <# $global:SmbStoragePath = $pathValues.psobject.properties['ShareDir'].value#>
+         $global:linuxLocalPath = $pathValue.Value.master
+         $global:windowsLocalPath = Expand-PathSMb $pathValue.Value.windowsWorker
+         $global:linuxShareName = 'k8sshare' # exposed by Linux VM
+         $global:windowsShareName = (Split-Path -Path $windowsLocalPath -NoQualifier).TrimStart('\') # visible from VMs
+         $global:windowsSharePath = Split-Path -Path $windowsLocalPath -Qualifier
+         $global:linuxHostRemotePath = "\\$(Get-ConfiguredIPControlPlane)\$linuxShareName"
+         $global:windowsHostRemotePath = "\\$(Get-ConfiguredKubeSwitchIP)\$windowsShareName"
+        
+     
     if ($SkipNodesCleanup -ne $true) {
         Remove-SharedFolderMountOnLinuxClient
     }
 
     Remove-SmbHostOnWindowsIfExisting
+}
 }
 
 function Restore-SmbShareAndFolderLinuxHost {
@@ -1028,9 +1067,25 @@ function Enable-SmbShare {
     }
 
     Copy-ScriptsToHooksDir -ScriptPaths @(Get-ChildItem -Path $localHooksDir | ForEach-Object { $_.FullName })
+     
+    $global:pathValues= $rootConfig.psobject.properties['Storage-Smb'].value
     Add-AddonToSetupJson -Addon ([pscustomobject] @{Name = $AddonName; Implementation = $ImplementationName; SmbHostType = $SmbHostType })
-    Restore-SmbShareAndFolder -SmbHostType $SmbHostType -SkipTest -SetupInfo $setupInfo
-    Restore-StorageClass -SmbHostType $SmbHostType -LinuxOnly $setupInfo.LinuxOnly
+    
+    New-SmbShareNamespace
+
+    foreach($pathValue in $pathValues.PSObject.Properties){
+       <# $global:SmbStoragePath = $pathValues.psobject.properties['ShareDir'].value#>
+        $global:linuxLocalPath = $pathValue.Value.master
+        $global:windowsLocalPath = Expand-PathSMb $pathValue.Value.windowsWorker
+        $global:linuxShareName = 'k8sshare' # exposed by Linux VM
+        $global:windowsShareName = (Split-Path -Path $windowsLocalPath -NoQualifier).TrimStart('\') # visible from VMs
+        $global:windowsSharePath = Split-Path -Path $windowsLocalPath -Qualifier
+        $global:linuxHostRemotePath = "\\$(Get-ConfiguredIPControlPlane)\$linuxShareName"
+        $global:windowsHostRemotePath = "\\$(Get-ConfiguredKubeSwitchIP)\$windowsShareName"
+       
+        Restore-SmbShareAndFolder -SmbHostType $SmbHostType -SkipTest -SetupInfo $setupInfo
+        Restore-StorageClass -SmbHostType $SmbHostType -LinuxOnly $setupInfo.LinuxOnly
+    }
 
     Write-Log -Console '********************************************************************************************'
     Write-Log -Console '** IMPORTANT:                                                                             **' 
@@ -1076,9 +1131,9 @@ function Disable-SmbShare {
     }
 
     Write-Log "Disabling '$AddonName'.."
+    Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = $AddonName; Implementation = $ImplementationName })
 
     Remove-SmbShareAndFolder -SkipNodesCleanup:$SkipNodesCleanup
-    Remove-AddonFromSetupJson -Addon ([pscustomobject] @{Name = $AddonName; Implementation = $ImplementationName })
     Remove-ScriptsFromHooksDir -ScriptNames @(Get-ChildItem -Path $localHooksDir | ForEach-Object { $_.Name })
 
     return @{Error = $null }
@@ -1338,7 +1393,11 @@ function Remove-LocalWinMountIfExisting {
 function New-SmbShareNamespace {
     $params = 'create', 'namespace', $namespace
     Write-Log "Invoking kubectl with '$params'.."
-    $result = Invoke-Kubectl -Params $params
+    if (Get-SmbShare -Name $namespace -ErrorAction SilentlyContinue) {
+        Write-Host "The SMB share '$namespace' already exists."
+    } else {
+        $result = Invoke-Kubectl -Params $params
+    }
     if ($result.Success -ne $true) {
         throw $result.Output
     }
