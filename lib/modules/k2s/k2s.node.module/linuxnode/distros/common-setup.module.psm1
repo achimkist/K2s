@@ -951,6 +951,7 @@ function Get-FlannelImages {
 
     &$executeRemoteCommand 'sudo crictl pull docker.io/flannel/flannel-cni-plugin:v1.5.1-flannel2'
     &$executeRemoteCommand 'sudo crictl pull docker.io/flannel/flannel:v0.26.7'
+    &$executeRemoteCommand 'sudo crictl pull registry.k8s.io/networking/kube-network-policies:v0.7.0'
 }
 
 function AddRegistryMirrors {
