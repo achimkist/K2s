@@ -88,14 +88,17 @@ Function Set-UpComputerBeforeProvisioning {
             &$executeRemoteCommand -Command "echo Acquire::http::Proxy \\\""$Proxy\\\""\; | sudo tee -a /etc/apt/apt.conf.d/proxy.conf"
         }
     }
-    Write-Log 'Retrieve hostname'
-    [string]$hostname = (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute 'hostname' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd").Output
-    if ([string]::IsNullOrWhiteSpace($hostname) -eq $true) {
-        throw "The hostname of the computer with IP '$IpAddress' could not be retrieved."
+
+    if (![string]::IsNullOrWhiteSpace($UserPwd)) {
+        Write-Log 'Retrieve hostname'
+        [string]$hostname = (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute 'hostname' -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd").Output
+        if ([string]::IsNullOrWhiteSpace($hostname) -eq $true) {
+            throw "The hostname of the computer with IP '$IpAddress' could not be retrieved."
+        }
+        
+        Write-Log "Add hostname '$hostname' to /etc/hosts"
+        (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "sudo sed -i 's/\tlocalhost/\tlocalhost $hostname/g' /etc/hosts" -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd").Output
     }
-    
-    Write-Log "Add hostname '$hostname' to /etc/hosts"
-    (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "sudo sed -i 's/\tlocalhost/\tlocalhost $hostname/g' /etc/hosts" -RemoteUser "$remoteUser" -RemoteUserPwd "$remoteUserPwd").Output
 }
 
 Function Set-UpComputerAfterProvisioning {
@@ -1454,6 +1457,33 @@ function Get-KubenodeBaseFileName {
     return 'Kubenode-Base.vhdx'
 }
 
+
+function Install-HelmAndYqOnKubeMaster
+{
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$UserName,
+        [Parameter(Mandatory = $true)]
+        [string]$UserPwd,
+        [Parameter(Mandatory = $true)]
+        [string]$IpAddress
+    )
+    $localScriptPath = "$PSScriptRoot\scripts\install-helm-yq.sh"
+    $remoteScriptPath = "/home/$UserName/install-helm-yq.sh"
+    if ( [string]::IsNullOrWhiteSpace($UserPwd))
+    {
+        Copy-ToRemoteComputerViaSshKey -Source $localScriptPath -Target $remoteScriptPath -UserName $UserName -IpAddress $IpAddress
+    }
+    else
+    {
+        Copy-ToRemoteComputerViaUserAndPwd -Source $localScriptPath -Target $remoteScriptPath -UserName $UserName -UserPwd $UserPwd -IpAddress $IpAddress
+    }
+    (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "sudo chmod +x $remoteScriptPath" -RemoteUser "$UserName@$IpAddress" -RemoteUserPwd $UserPwd).Output | Write-Log
+    (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "sudo sed -i 's/\r$//' $remoteScriptPath" -RemoteUser "$UserName@$IpAddress" -RemoteUserPwd $UserPwd).Output | Write-Log
+    (Invoke-CmdOnControlPlaneViaUserAndPwd -CmdToExecute "sudo $remoteScriptPath" -RemoteUser "$UserName@$IpAddress" -RemoteUserPwd $UserPwd).Output | Write-Log
+    
+    Write-Log "install-helm-yq.sh copied and executed successfully on $IpAddress"
+}
 function New-VmImageForKubernetesNode {
     param (
         [parameter(Mandatory = $false, HelpMessage = 'The path to save the prepared base image.')]
@@ -1566,6 +1596,7 @@ function New-VmImageForControlPlaneNode {
             GatewayIpAddress     = $GatewayIpAddress
         }
         Edit-SupportForWSL @supportForWSLParams
+        Install-HelmAndYqOnKubeMaster -UserName $vmUserName -UserPwd $vmUserPwd -IpAddress $IpAddress
     }
 
     $kubemasterCreationParams = @{
@@ -1979,8 +2010,8 @@ function Update-CoreDNSConfigurationviaSSH {
     }
 
     # exchange securitycontext for coredns to allow it to run on port 53
-    &$executeRemoteCommand "kubectl get deployment coredns -n kube-system -o yaml | sed '/^\s*securityContext: {}/c\      securityContext:\n        sysctls:\n        - name: net.ipv4.ip_unprivileged_port_start\n          value: `"`"53`"`"' | kubectl apply -f -" 
-    
+    &$executeRemoteCommand "kubectl get deployment coredns -n kube-system -o yaml | sed '/^\s*securityContext: {}/c\      securityContext:\n        sysctls:\n        - name: net.ipv4.ip_unprivileged_port_start\n          value: `"`"53`"`"' | kubectl apply -f -"
+
 }
 
 
